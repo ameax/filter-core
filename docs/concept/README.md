@@ -70,33 +70,50 @@ Das bestehende Filter-System in `Support\Filters` bietet bereits:
 src/
 ├── Data/
 │   ├── FilterDefinition.php     ✓ Implementiert
-│   └── FilterValue.php          ✓ Implementiert
+│   ├── FilterValue.php          ✓ Implementiert
+│   ├── FilterValueBuilder.php   ✓ Implementiert (Fluent API)
+│   └── BetweenValue.php         ✓ Implementiert (Type-safe DTO für Ranges)
 │
 ├── Enums/
-│   ├── FilterTypeEnum.php       ✓ Implementiert (Phase 1: SELECT, INTEGER, TEXT, BOOLEAN)
-│   ├── MatchModeEnum.php        ✓ Implementiert (Phase 1: IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY, NOT_EMPTY)
+│   ├── FilterTypeEnum.php       ✓ Implementiert (SELECT, INTEGER, TEXT, BOOLEAN)
+│   ├── MatchModeEnum.php        ✓ Implementiert (IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY, NOT_EMPTY)
 │   └── GroupOperatorEnum.php    ✓ Implementiert (AND, OR)
 │
-├── Selections/                  □ Geplant
-│   ├── Selection.php
-│   └── FilterGroup.php
+├── Selections/
+│   └── FilterSelection.php      ✓ Implementiert (Gruppierung, JSON-Serialisierung)
 │
 ├── Query/
-│   └── QueryApplicator.php      ✓ Implementiert (Eloquent Builder)
+│   └── QueryApplicator.php      ✓ Implementiert (Eloquent Builder, Sanitization, Validation)
 │
-└── Filters/                     □ Geplant (Phase 1)
-    ├── SelectFilter.php
-    ├── IntegerFilter.php
-    ├── TextFilter.php
-    └── BooleanFilter.php
+├── Concerns/
+│   └── Filterable.php           ✓ Implementiert (Model Trait)
+│
+├── Exceptions/
+│   └── FilterValidationException.php  ✓ Implementiert
+│
+└── Filters/
+    ├── Filter.php               ✓ Implementiert (Basisklasse mit apply, sanitizeValue, validationRules, typedValue)
+    ├── SelectFilter.php         ✓ Implementiert
+    ├── IntegerFilter.php        ✓ Implementiert
+    ├── TextFilter.php           ✓ Implementiert
+    ├── BooleanFilter.php        ✓ Implementiert
+    ├── HasOptions.php           ✓ Implementiert (Interface)
+    └── Dynamic/
+        ├── DynamicFilter.php    ✓ Implementiert
+        ├── DynamicSelectFilter.php   ✓ Implementiert
+        ├── DynamicIntegerFilter.php  ✓ Implementiert
+        ├── DynamicTextFilter.php     ✓ Implementiert
+        └── DynamicBooleanFilter.php  ✓ Implementiert
 
 tests/
-├── Models/
-│   └── Koi.php                  ✓ Test-Model mit allen Phase 1 Typen
+├── TutorialTest.php             ✓ 40 Tests als vollständiges Tutorial
 ├── Query/
 │   └── QueryApplicatorTest.php  ✓ 21 Tests für alle Match-Modi
-└── database/migrations/
-    └── create_koi_table.php     ✓ Test-Migration
+├── Filters/
+│   ├── FilterClassTest.php      ✓ Tests für Filter-Klassen
+│   └── DynamicFilterTest.php    ✓ Tests für dynamische Filter
+└── Selections/
+    └── FilterSelectionTest.php  ✓ Tests für Selections
 ```
 
 ## Kern-Konzepte
@@ -169,6 +186,107 @@ $applicator->applyFilters([
 $users = $applicator->getQuery()->get();
 ```
 
+## Value Processing Pipeline
+
+Der QueryApplicator verarbeitet Werte in einer definierten Pipeline:
+
+```
+Input → sanitizeValue() → typedValue() → validationRules() → apply()
+```
+
+### 1. Sanitization (sanitizeValue)
+
+Automatische Konvertierung von Input-Werten:
+
+```php
+// In Filter.php
+public function sanitizeValue(mixed $value, MatchModeEnum $mode): mixed
+{
+    return $value; // Default: keine Transformation
+}
+
+// BooleanFilter: "true", "1", "yes" → true
+// IntegerFilter: "123" → 123, array → BetweenValue
+// TextFilter: trim($value)
+```
+
+### 2. Type Checking (typedValue)
+
+Strikte Typisierung mit PHP strict_types:
+
+```php
+// BooleanFilter
+public function typedValue(bool $value): bool
+
+// IntegerFilter
+public function typedValue(int|BetweenValue $value): int|BetweenValue
+
+// TextFilter
+public function typedValue(string $value): string
+
+// SelectFilter
+public function typedValue(string|array $value): string|array
+```
+
+Bei TypeError wird `FilterValidationException` geworfen.
+
+### 3. Validation (validationRules)
+
+Laravel Validation Rules:
+
+```php
+// In Filter.php
+public function validationRules(MatchModeEnum $mode): array
+{
+    return []; // Default: keine Validierung
+}
+
+// IntegerFilter
+public function validationRules(MatchModeEnum $mode): array
+{
+    return ['value' => 'required|numeric'];
+}
+
+// SelectFilter mit Options
+public function validationRules(MatchModeEnum $mode): array
+{
+    return ['value' => Rule::in(array_keys($this->options()))];
+}
+```
+
+### 4. Custom Apply (apply)
+
+Eigene Query-Logik pro Filter:
+
+```php
+public function apply(Builder|QueryBuilder $query, MatchModeEnum $mode, mixed $value): bool
+{
+    // Return true: Custom-Logik wurde angewendet
+    // Return false: Standard QueryApplicator-Logik verwenden
+    return false;
+}
+```
+
+## BetweenValue DTO
+
+Type-safe Repräsentation für BETWEEN-Werte:
+
+```php
+use Ameax\FilterCore\Data\BetweenValue;
+
+// Erstellen
+$between = new BetweenValue(min: 10, max: 100);
+$between = BetweenValue::fromArray(['min' => 10, 'max' => 100]);
+$between = BetweenValue::fromArray([10, 100]); // Indexed
+
+// Zugriff
+$between->min;  // 10
+$between->max;  // 100
+
+// Konvertierung
+$between->toArray();  // ['min' => 10, 'max' => 100]
+```
+
 ## Weiterführende Dokumentation
 
 - [Filter-Typen](./filter-types.md) - Detaillierte Beschreibung aller Filter-Typen
@@ -185,9 +303,30 @@ Das neue System soll das bestehende `Support\Filters` System nicht ersetzen, son
 2. Parallelbetrieb während der Übergangsphase
 3. Schrittweise Migration einzelner Domains
 
-## Nächste Schritte
+## Implementierungsstatus
 
-1. **Phase 1**: Core-Package Implementierung
-2. **Phase 2**: Livewire/Flux UI-Package
-3. **Phase 3**: Filament-Integration
-4. **Phase 4**: Migration bestehender Filter
+### Phase 1 (Abgeschlossen)
+- [x] Core-Package Implementierung
+- [x] Filter-Typen (Select, Integer, Text, Boolean)
+- [x] Match-Modi (IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY)
+- [x] QueryApplicator mit Eloquent Integration
+- [x] FilterSelection für Persistierung
+- [x] Dynamic Filters
+- [x] Filterable Trait
+- [x] Value Sanitization Pipeline
+- [x] Value Validation mit Laravel Validator
+- [x] Type-Safe Values (typedValue)
+- [x] Custom Filter Logic (apply)
+- [x] BetweenValue DTO
+
+### Phase 2 (Geplant)
+- [ ] Livewire/Flux UI-Package
+- [ ] Filter-Gruppen mit OR-Logik
+- [ ] Erweiterbares Match-Mode System
+
+### Phase 3 (Geplant)
+- [ ] Filament-Integration
+- [ ] Zusätzliche Filter-Typen (Date, DateTime, Decimal)
+
+### Phase 4 (Geplant)
+- [ ] Migration bestehender Filter

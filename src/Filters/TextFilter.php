@@ -1,31 +1,77 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Ameax\FilterCore\Filters;
 
+use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
-use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\Filters\Dynamic\DynamicTextFilter;
+use Ameax\FilterCore\MatchModes\ContainsMatchMode;
+use Ameax\FilterCore\MatchModes\IsMatchMode;
+use Ameax\FilterCore\MatchModes\IsNotMatchMode;
 
 /**
  * Base class for TEXT type filters.
  */
 abstract class TextFilter extends Filter
 {
+    /**
+     * Create a dynamic text filter with the given key.
+     */
+    public static function dynamic(string $key): DynamicTextFilter
+    {
+        return DynamicTextFilter::create($key);
+    }
+
     public function type(): FilterTypeEnum
     {
         return FilterTypeEnum::TEXT;
     }
 
-    public function defaultMode(): MatchModeEnum
+    public function defaultMode(): MatchModeContract
     {
-        return MatchModeEnum::CONTAINS;
+        return new ContainsMatchMode();
     }
 
     public function allowedModes(): array
     {
         return [
-            MatchModeEnum::CONTAINS,
-            MatchModeEnum::IS,
-            MatchModeEnum::IS_NOT,
+            new ContainsMatchMode(),
+            new IsMatchMode(),
+            new IsNotMatchMode(),
         ];
+    }
+
+    /**
+     * Sanitize text values by trimming whitespace.
+     */
+    public function sanitizeValue(mixed $value, MatchModeContract $mode): mixed
+    {
+        if (is_string($value)) {
+            return trim($value);
+        }
+
+        return $value;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function validationRules(MatchModeContract $mode): array
+    {
+        return [
+            'value' => 'required|string',
+        ];
+    }
+
+    /**
+     * Type-safe value method for text filters.
+     *
+     * Can be used directly for strict typing, bypassing sanitize/validate.
+     */
+    public function typedValue(string $value): string
+    {
+        return $value;
     }
 }

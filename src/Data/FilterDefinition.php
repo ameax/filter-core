@@ -1,9 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Ameax\FilterCore\Data;
 
+use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
-use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\MatchModes\AnyMatchMode;
+use Ameax\FilterCore\MatchModes\BetweenMatchMode;
+use Ameax\FilterCore\MatchModes\ContainsMatchMode;
+use Ameax\FilterCore\MatchModes\EmptyMatchMode;
+use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
+use Ameax\FilterCore\MatchModes\IsMatchMode;
+use Ameax\FilterCore\MatchModes\IsNotMatchMode;
+use Ameax\FilterCore\MatchModes\LessThanMatchMode;
+use Ameax\FilterCore\MatchModes\NoneMatchMode;
+use Ameax\FilterCore\MatchModes\NotEmptyMatchMode;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 
@@ -15,9 +27,10 @@ use JsonSerializable;
 final class FilterDefinition implements Arrayable, JsonSerializable
 {
     /**
-     * @param  array<MatchModeEnum>  $allowedMatchModes
+     * @param  array<MatchModeContract>  $allowedMatchModes
      * @param  array<int|string, mixed>  $options  For SELECT type: ['value' => 'Label', ...]
      * @param  array<string, mixed>  $meta  Additional metadata
+     * @param  string|null  $relation  Relation name for relation filters (e.g., 'pond')
      */
     public function __construct(
         protected string $key,
@@ -25,17 +38,18 @@ final class FilterDefinition implements Arrayable, JsonSerializable
         protected string $column,
         protected ?string $label = null,
         protected array $allowedMatchModes = [],
-        protected ?MatchModeEnum $defaultMatchMode = null,
+        protected ?MatchModeContract $defaultMatchMode = null,
         protected bool $nullable = false,
         protected array $options = [],
         protected array $meta = [],
+        protected ?string $relation = null,
     ) {
         if (empty($this->allowedMatchModes)) {
             $this->allowedMatchModes = $this->getDefaultMatchModesForType();
         }
 
         if ($this->defaultMatchMode === null) {
-            $this->defaultMatchMode = $this->allowedMatchModes[0] ?? MatchModeEnum::IS;
+            $this->defaultMatchMode = $this->allowedMatchModes[0] ?? new IsMatchMode();
         }
 
         if ($this->label === null) {
@@ -64,16 +78,16 @@ final class FilterDefinition implements Arrayable, JsonSerializable
     }
 
     /**
-     * @return array<MatchModeEnum>
+     * @return array<MatchModeContract>
      */
     public function getAllowedMatchModes(): array
     {
         return $this->allowedMatchModes;
     }
 
-    public function getDefaultMatchMode(): MatchModeEnum
+    public function getDefaultMatchMode(): MatchModeContract
     {
-        return $this->defaultMatchMode ?? MatchModeEnum::IS;
+        return $this->defaultMatchMode ?? new IsMatchMode();
     }
 
     public function isNullable(): bool
@@ -97,43 +111,65 @@ final class FilterDefinition implements Arrayable, JsonSerializable
         return $this->meta;
     }
 
-    public function isMatchModeAllowed(MatchModeEnum $mode): bool
+    /**
+     * Get the relation name for relation filters.
+     */
+    public function getRelation(): ?string
     {
-        return in_array($mode, $this->allowedMatchModes, true);
+        return $this->relation;
     }
 
     /**
-     * @return array<MatchModeEnum>
+     * Check if this filter applies via a relation.
+     */
+    public function hasRelation(): bool
+    {
+        return $this->relation !== null;
+    }
+
+    public function isMatchModeAllowed(MatchModeContract $mode): bool
+    {
+        foreach ($this->allowedMatchModes as $allowedMode) {
+            if ($allowedMode->key() === $mode->key()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<MatchModeContract>
      */
     protected function getDefaultMatchModesForType(): array
     {
         $modes = match ($this->type) {
             FilterTypeEnum::SELECT => [
-                MatchModeEnum::IS,
-                MatchModeEnum::IS_NOT,
-                MatchModeEnum::ANY,
-                MatchModeEnum::NONE,
+                new IsMatchMode(),
+                new IsNotMatchMode(),
+                new AnyMatchMode(),
+                new NoneMatchMode(),
             ],
             FilterTypeEnum::INTEGER => [
-                MatchModeEnum::IS,
-                MatchModeEnum::IS_NOT,
-                MatchModeEnum::GREATER_THAN,
-                MatchModeEnum::LESS_THAN,
-                MatchModeEnum::BETWEEN,
+                new IsMatchMode(),
+                new IsNotMatchMode(),
+                new GreaterThanMatchMode(),
+                new LessThanMatchMode(),
+                new BetweenMatchMode(),
             ],
             FilterTypeEnum::TEXT => [
-                MatchModeEnum::CONTAINS,
-                MatchModeEnum::IS,
-                MatchModeEnum::IS_NOT,
+                new ContainsMatchMode(),
+                new IsMatchMode(),
+                new IsNotMatchMode(),
             ],
             FilterTypeEnum::BOOLEAN => [
-                MatchModeEnum::IS,
+                new IsMatchMode(),
             ],
         };
 
         if ($this->nullable) {
-            $modes[] = MatchModeEnum::EMPTY;
-            $modes[] = MatchModeEnum::NOT_EMPTY;
+            $modes[] = new EmptyMatchMode();
+            $modes[] = new NotEmptyMatchMode();
         }
 
         return $modes;
@@ -146,11 +182,12 @@ final class FilterDefinition implements Arrayable, JsonSerializable
             'type' => $this->type->value,
             'column' => $this->column,
             'label' => $this->getLabel(),
-            'allowedMatchModes' => array_map(fn (MatchModeEnum $m) => $m->value, $this->allowedMatchModes),
-            'defaultMatchMode' => $this->getDefaultMatchMode()->value,
+            'allowedMatchModes' => array_map(fn (MatchModeContract $m) => $m->key(), $this->allowedMatchModes),
+            'defaultMatchMode' => $this->getDefaultMatchMode()->key(),
             'nullable' => $this->nullable,
             'options' => $this->options,
             'meta' => $this->meta,
+            'relation' => $this->relation,
         ];
     }
 

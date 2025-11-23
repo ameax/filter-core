@@ -1,9 +1,12 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Ameax\FilterCore\Data;
 
-use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Filters\Filter;
+use Ameax\FilterCore\MatchModes\MatchMode;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 
@@ -18,7 +21,7 @@ final class FilterValue implements Arrayable, JsonSerializable
 {
     public function __construct(
         protected string $filterKey,
-        protected MatchModeEnum $matchMode,
+        protected MatchModeContract $matchMode,
         protected mixed $value,
     ) {}
 
@@ -35,7 +38,7 @@ final class FilterValue implements Arrayable, JsonSerializable
         return new FilterValueBuilder($filterClass);
     }
 
-    public static function make(string $filterKey, MatchModeEnum $matchMode, mixed $value): self
+    public static function make(string $filterKey, MatchModeContract $matchMode, mixed $value): self
     {
         return new self($filterKey, $matchMode, $value);
     }
@@ -45,7 +48,7 @@ final class FilterValue implements Arrayable, JsonSerializable
         return $this->filterKey;
     }
 
-    public function getMatchMode(): MatchModeEnum
+    public function getMatchMode(): MatchModeContract
     {
         return $this->matchMode;
     }
@@ -60,7 +63,7 @@ final class FilterValue implements Arrayable, JsonSerializable
         return new self($this->filterKey, $this->matchMode, $value);
     }
 
-    public function withMatchMode(MatchModeEnum $matchMode): self
+    public function withMatchMode(MatchModeContract $matchMode): self
     {
         return new self($this->filterKey, $matchMode, $this->value);
     }
@@ -69,7 +72,7 @@ final class FilterValue implements Arrayable, JsonSerializable
     {
         return [
             'filter' => $this->filterKey,
-            'mode' => $this->matchMode->value,
+            'mode' => $this->matchMode->key(),
             'value' => $this->value,
         ];
     }
@@ -89,7 +92,7 @@ final class FilterValue implements Arrayable, JsonSerializable
     {
         return new self(
             $data['filter'],
-            MatchModeEnum::from($data['mode']),
+            MatchMode::get($data['mode']),
             $data['value'],
         );
     }

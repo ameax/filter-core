@@ -4,7 +4,14 @@ namespace Ameax\FilterCore\Tests\Filters;
 
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
-use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\MatchModes\AnyMatchMode;
+use Ameax\FilterCore\MatchModes\BetweenMatchMode;
+use Ameax\FilterCore\MatchModes\ContainsMatchMode;
+use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
+use Ameax\FilterCore\MatchModes\IsMatchMode;
+use Ameax\FilterCore\MatchModes\IsNotMatchMode;
+use Ameax\FilterCore\MatchModes\LessThanMatchMode;
+use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
@@ -56,13 +63,13 @@ class FilterClassTest extends TestCase
     public function test_filter_class_returns_allowed_modes(): void
     {
         $filter = KoiStatusFilter::make();
+        $modes = $filter->allowedModes();
 
-        $this->assertEquals([
-            MatchModeEnum::IS,
-            MatchModeEnum::IS_NOT,
-            MatchModeEnum::ANY,
-            MatchModeEnum::NONE,
-        ], $filter->allowedModes());
+        $this->assertCount(4, $modes);
+        $this->assertEquals('is', $modes[0]->key());
+        $this->assertEquals('is_not', $modes[1]->key());
+        $this->assertEquals('any', $modes[2]->key());
+        $this->assertEquals('none', $modes[3]->key());
     }
 
     public function test_filter_class_key_is_class_basename(): void
@@ -92,17 +99,17 @@ class FilterClassTest extends TestCase
         $filterValue = FilterValue::for(KoiStatusFilter::class)->value('active');
 
         $this->assertEquals('KoiStatusFilter', $filterValue->getFilterKey());
-        $this->assertEquals(MatchModeEnum::IS, $filterValue->getMatchMode());
+        $this->assertInstanceOf(IsMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals('active', $filterValue->getValue());
     }
 
     public function test_filter_value_fluent_with_explicit_mode(): void
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)
-            ->mode(MatchModeEnum::ANY)
+            ->mode(new AnyMatchMode())
             ->value(['active', 'pending']);
 
-        $this->assertEquals(MatchModeEnum::ANY, $filterValue->getMatchMode());
+        $this->assertInstanceOf(AnyMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(['active', 'pending'], $filterValue->getValue());
     }
 
@@ -110,7 +117,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)->is('active');
 
-        $this->assertEquals(MatchModeEnum::IS, $filterValue->getMatchMode());
+        $this->assertInstanceOf(IsMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals('active', $filterValue->getValue());
     }
 
@@ -118,7 +125,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)->isNot('inactive');
 
-        $this->assertEquals(MatchModeEnum::IS_NOT, $filterValue->getMatchMode());
+        $this->assertInstanceOf(IsNotMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals('inactive', $filterValue->getValue());
     }
 
@@ -126,7 +133,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)->any(['active', 'pending']);
 
-        $this->assertEquals(MatchModeEnum::ANY, $filterValue->getMatchMode());
+        $this->assertInstanceOf(AnyMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(['active', 'pending'], $filterValue->getValue());
     }
 
@@ -134,7 +141,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)->none(['inactive']);
 
-        $this->assertEquals(MatchModeEnum::NONE, $filterValue->getMatchMode());
+        $this->assertInstanceOf(NoneMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(['inactive'], $filterValue->getValue());
     }
 
@@ -142,7 +149,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiCountFilter::class)->greaterThan(10);
 
-        $this->assertEquals(MatchModeEnum::GREATER_THAN, $filterValue->getMatchMode());
+        $this->assertInstanceOf(GreaterThanMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(10, $filterValue->getValue());
     }
 
@@ -150,7 +157,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiCountFilter::class)->lessThan(10);
 
-        $this->assertEquals(MatchModeEnum::LESS_THAN, $filterValue->getMatchMode());
+        $this->assertInstanceOf(LessThanMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(10, $filterValue->getValue());
     }
 
@@ -158,7 +165,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiCountFilter::class)->between(5, 15);
 
-        $this->assertEquals(MatchModeEnum::BETWEEN, $filterValue->getMatchMode());
+        $this->assertInstanceOf(BetweenMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(['min' => 5, 'max' => 15], $filterValue->getValue());
     }
 
@@ -166,7 +173,7 @@ class FilterClassTest extends TestCase
     {
         $filterValue = FilterValue::for(KoiNameFilter::class)->contains('Sh');
 
-        $this->assertEquals(MatchModeEnum::CONTAINS, $filterValue->getMatchMode());
+        $this->assertInstanceOf(ContainsMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals('Sh', $filterValue->getValue());
     }
 

@@ -3,7 +3,7 @@
 namespace Ameax\FilterCore\Tests\Selections;
 
 use Ameax\FilterCore\Data\FilterValue;
-use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
 use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
@@ -128,7 +128,7 @@ class FilterSelectionTest extends TestCase
 
         $this->assertNotNull($filterValue);
         $this->assertEquals('active', $filterValue->getValue());
-        $this->assertEquals(MatchModeEnum::IS, $filterValue->getMatchMode());
+        $this->assertInstanceOf(IsMatchMode::class, $filterValue->getMatchMode());
     }
 
     public function test_get_returns_null_for_missing_filter(): void

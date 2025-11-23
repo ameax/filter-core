@@ -1,14 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Ameax\FilterCore\Query;
 
+use Ameax\FilterCore\Contracts\MatchModeContract;
+use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterDefinition;
 use Ameax\FilterCore\Data\FilterValue;
-use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
+use TypeError;
 
 /**
  * Applies filter values to Eloquent queries.
@@ -50,7 +56,7 @@ final class QueryApplicator
     {
         foreach ($filters as $filter) {
             $filterInstance = is_string($filter) ? $filter::make() : $filter;
-            $key = $filterInstance::key();
+            $key = $filterInstance->resolveKey();
 
             $this->filters[$key] = $filterInstance;
             $this->filterDefinitions[$key] = $filterInstance->toDefinition();
@@ -75,6 +81,9 @@ final class QueryApplicator
 
     /**
      * Apply a single filter value to the query.
+     *
+     * @throws InvalidArgumentException When filter is not defined or match mode not allowed
+     * @throws FilterValidationException When filter value validation fails
      */
     public function applyFilter(FilterValue $filterValue): self
     {
@@ -89,7 +98,7 @@ final class QueryApplicator
 
         if (! $definition->isMatchModeAllowed($matchMode)) {
             throw new InvalidArgumentException(
-                "Match mode '{$matchMode->value}' is not allowed for filter '{$filterKey}'"
+                "Match mode '{$matchMode->key()}' is not allowed for filter '{$filterKey}'"
             );
         }
 
@@ -100,19 +109,82 @@ final class QueryApplicator
         $filter = $this->filters[$filterKey] ?? null;
         $relation = $filter?->getRelation();
 
-        if ($relation !== null && $this->query instanceof Builder) {
-            // Apply via whereHas
+        // Sanitize, type-check, and validate value if filter instance is available
+        if ($filter !== null) {
+            $value = $filter->sanitizeValue($value, $matchMode);
+            $value = $this->applyTypedValue($filter, $filterKey, $value);
+            $this->validateFilterValue($filter, $filterKey, $matchMode, $value);
+        }
+
+        // Convert BetweenValue to array for query application
+        if ($value instanceof BetweenValue) {
+            $value = $value->toArray();
+        }
+
+        // First, check if filter has custom apply logic
+        if ($filter !== null && $filter->apply($this->query, $matchMode, $value)) {
+            // Custom logic was applied - done
+        } elseif ($relation !== null && $this->query instanceof Builder) {
+            // Apply via whereHas for relation filters
             $this->query->whereHas($relation, function (Builder $query) use ($column, $matchMode, $value): void {
-                $this->applyMatchModeToQuery($query, $column, $matchMode, $value);
+                $matchMode->apply($query, $column, $value);
             });
         } else {
-            // Apply directly
-            $this->applyMatchModeToQuery($this->query, $column, $matchMode, $value);
+            // Apply match mode logic directly
+            $matchMode->apply($this->query, $column, $value);
         }
 
         $this->appliedFilters[] = $filterValue;
 
         return $this;
+    }
+
+    /**
+     * Apply the filter's typedValue() method if it exists.
+     *
+     * This provides strict type checking - if the filter defines a typedValue() method
+     * with a specific type signature, PHP will throw a TypeError if the value doesn't match.
+     *
+     * @throws FilterValidationException When type check fails
+     */
+    protected function applyTypedValue(Filter $filter, string $filterKey, mixed $value): mixed
+    {
+        if (! method_exists($filter, 'typedValue')) {
+            return $value;
+        }
+
+        try {
+            return $filter->typedValue($value);
+        } catch (TypeError $e) {
+            throw new FilterValidationException(
+                $filterKey,
+                ['value' => ['The value type is invalid for this filter: '.$e->getMessage()]]
+            );
+        }
+    }
+
+    /**
+     * Validate a filter value using the filter's validation rules.
+     *
+     * @throws FilterValidationException When validation fails
+     */
+    protected function validateFilterValue(
+        Filter $filter,
+        string $filterKey,
+        MatchModeContract $matchMode,
+        mixed $value
+    ): void {
+        $rules = $filter->validationRules($matchMode);
+
+        if (empty($rules)) {
+            return;
+        }
+
+        $validator = Validator::make(['value' => $value], $rules);
+
+        if ($validator->fails()) {
+            throw new FilterValidationException($filterKey, $validator->errors()->toArray());
+        }
     }
 
     /**
@@ -155,101 +227,5 @@ final class QueryApplicator
     public function hasAppliedFilters(): bool
     {
         return $this->appliedFilters !== [];
-    }
-
-    /**
-     * Apply the match mode logic to a query.
-     *
-     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     */
-    protected function applyMatchModeToQuery(
-        Builder|QueryBuilder $query,
-        string $column,
-        MatchModeEnum $matchMode,
-        mixed $value
-    ): void {
-        match ($matchMode) {
-            MatchModeEnum::IS => $this->applyIs($query, $column, $value),
-            MatchModeEnum::IS_NOT => $this->applyIsNot($query, $column, $value),
-            MatchModeEnum::ANY => $this->applyAny($query, $column, $value),
-            MatchModeEnum::NONE => $this->applyNone($query, $column, $value),
-            MatchModeEnum::GREATER_THAN => $query->where($column, '>', $value),
-            MatchModeEnum::LESS_THAN => $query->where($column, '<', $value),
-            MatchModeEnum::BETWEEN => $this->applyBetween($query, $column, $value),
-            MatchModeEnum::CONTAINS => $query->where($column, 'like', '%'.$value.'%'),
-            MatchModeEnum::EMPTY => $query->whereNull($column),
-            MatchModeEnum::NOT_EMPTY => $query->whereNotNull($column),
-        };
-    }
-
-    /**
-     * Apply IS match mode.
-     *
-     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     */
-    protected function applyIs(Builder|QueryBuilder $query, string $column, mixed $value): void
-    {
-        if (is_array($value)) {
-            $query->whereIn($column, $value);
-        } else {
-            $query->where($column, '=', $value);
-        }
-    }
-
-    /**
-     * Apply IS_NOT match mode.
-     *
-     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     */
-    protected function applyIsNot(Builder|QueryBuilder $query, string $column, mixed $value): void
-    {
-        if (is_array($value)) {
-            $query->whereNotIn($column, $value);
-        } else {
-            $query->where($column, '!=', $value);
-        }
-    }
-
-    /**
-     * Apply ANY match mode.
-     *
-     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     */
-    protected function applyAny(Builder|QueryBuilder $query, string $column, mixed $value): void
-    {
-        $values = is_array($value) ? $value : [$value];
-        $query->whereIn($column, $values);
-    }
-
-    /**
-     * Apply NONE match mode.
-     *
-     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     */
-    protected function applyNone(Builder|QueryBuilder $query, string $column, mixed $value): void
-    {
-        $values = is_array($value) ? $value : [$value];
-        $query->whereNotIn($column, $values);
-    }
-
-    /**
-     * Apply BETWEEN match mode.
-     *
-     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     */
-    protected function applyBetween(Builder|QueryBuilder $query, string $column, mixed $value): void
-    {
-        if (! is_array($value)) {
-            throw new InvalidArgumentException('BETWEEN match mode requires an array value');
-        }
-
-        $min = $value['min'] ?? $value[0] ?? null;
-        $max = $value['max'] ?? $value[1] ?? null;
-
-        if ($min === null || $max === null) {
-            throw new InvalidArgumentException('BETWEEN match mode requires both min and max values');
-        }
-
-        $query->whereBetween($column, [$min, $max]);
     }
 }
