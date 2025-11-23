@@ -34,17 +34,17 @@ abstract class IntegerFilter extends Filter
 
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     public function allowedModes(): array
     {
         return [
-            new IsMatchMode(),
-            new IsNotMatchMode(),
-            new GreaterThanMatchMode(),
-            new LessThanMatchMode(),
-            new BetweenMatchMode(),
+            new IsMatchMode,
+            new IsNotMatchMode,
+            new GreaterThanMatchMode,
+            new LessThanMatchMode,
+            new BetweenMatchMode,
         ];
     }
 

@@ -98,7 +98,7 @@ final class DynamicSelectFilter extends Filter implements DynamicFilter, HasOpti
 
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     /**
@@ -107,10 +107,10 @@ final class DynamicSelectFilter extends Filter implements DynamicFilter, HasOpti
     public function allowedModes(): array
     {
         return [
-            new IsMatchMode(),
-            new IsNotMatchMode(),
-            new AnyMatchMode(),
-            new NoneMatchMode(),
+            new IsMatchMode,
+            new IsNotMatchMode,
+            new AnyMatchMode,
+            new NoneMatchMode,
         ];
     }
 

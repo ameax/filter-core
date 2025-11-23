@@ -31,15 +31,15 @@ abstract class TextFilter extends Filter
 
     public function defaultMode(): MatchModeContract
     {
-        return new ContainsMatchMode();
+        return new ContainsMatchMode;
     }
 
     public function allowedModes(): array
     {
         return [
-            new ContainsMatchMode(),
-            new IsMatchMode(),
-            new IsNotMatchMode(),
+            new ContainsMatchMode,
+            new IsMatchMode,
+            new IsNotMatchMode,
         ];
     }
 

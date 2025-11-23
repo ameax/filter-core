@@ -77,7 +77,7 @@ abstract class Filter
      */
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     /**
@@ -129,13 +129,12 @@ abstract class Filter
     public static function make(): self
     {
         // @phpstan-ignore new.static
-        return new static();
+        return new static;
     }
 
     /**
      * Start building a FilterValue for this filter.
      *
-     * @return \Ameax\FilterCore\Data\FilterValueBuilder
      *
      * @example KoiStatusFilter::value()->is('active')
      * @example KoiCountFilter::value()->greaterThan(10)
@@ -153,7 +152,7 @@ abstract class Filter
     public static function via(string $relation): self
     {
         // @phpstan-ignore new.static
-        $filter = new static();
+        $filter = new static;
         $filter->relation = $relation;
 
         return $filter;
@@ -195,8 +194,8 @@ abstract class Filter
         $allowedModes = $this->allowedModes();
 
         if ($this->nullable()) {
-            $allowedModes[] = new EmptyMatchMode();
-            $allowedModes[] = new NotEmptyMatchMode();
+            $allowedModes[] = new EmptyMatchMode;
+            $allowedModes[] = new NotEmptyMatchMode;
         }
 
         return new FilterDefinition(

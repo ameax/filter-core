@@ -33,16 +33,16 @@ abstract class SelectFilter extends Filter implements HasOptions
 
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     public function allowedModes(): array
     {
         return [
-            new IsMatchMode(),
-            new IsNotMatchMode(),
-            new AnyMatchMode(),
-            new NoneMatchMode(),
+            new IsMatchMode,
+            new IsNotMatchMode,
+            new AnyMatchMode,
+            new NoneMatchMode,
         ];
     }
 

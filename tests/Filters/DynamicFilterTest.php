@@ -13,14 +13,9 @@ use Ameax\FilterCore\Filters\Dynamic\DynamicTextFilter;
 use Ameax\FilterCore\Filters\IntegerFilter;
 use Ameax\FilterCore\Filters\SelectFilter;
 use Ameax\FilterCore\Filters\TextFilter;
-use Ameax\FilterCore\MatchModes\AnyMatchMode;
-use Ameax\FilterCore\MatchModes\BetweenMatchMode;
 use Ameax\FilterCore\MatchModes\ContainsMatchMode;
 use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
-use Ameax\FilterCore\MatchModes\IsNotMatchMode;
-use Ameax\FilterCore\MatchModes\LessThanMatchMode;
-use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
@@ -243,7 +238,7 @@ class DynamicFilterTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('custom_status', new IsMatchMode(), 'active'))
+            ->applyFilter(new FilterValue('custom_status', new IsMatchMode, 'active'))
             ->getQuery()
             ->get();
 
@@ -257,7 +252,7 @@ class DynamicFilterTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('custom_count', new GreaterThanMatchMode(), 5))
+            ->applyFilter(new FilterValue('custom_count', new GreaterThanMatchMode, 5))
             ->getQuery()
             ->get();
 
@@ -271,7 +266,7 @@ class DynamicFilterTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('custom_name', new ContainsMatchMode(), 'Ko'))
+            ->applyFilter(new FilterValue('custom_name', new ContainsMatchMode, 'Ko'))
             ->getQuery()
             ->get();
 
@@ -285,7 +280,7 @@ class DynamicFilterTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('custom_active', new IsMatchMode(), true))
+            ->applyFilter(new FilterValue('custom_active', new IsMatchMode, true))
             ->getQuery()
             ->get();
 
@@ -301,7 +296,7 @@ class DynamicFilterTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('pond_water_type', new IsMatchMode(), 'fresh'))
+            ->applyFilter(new FilterValue('pond_water_type', new IsMatchMode, 'fresh'))
             ->getQuery()
             ->get();
 
@@ -319,8 +314,8 @@ class DynamicFilterTest extends TestCase
                 \Ameax\FilterCore\Tests\Filters\KoiCountFilter::class,
             ])
             ->applyFilters([
-                new FilterValue('custom_status', new IsMatchMode(), 'active'),
-                new FilterValue('KoiCountFilter', new GreaterThanMatchMode(), 15),
+                new FilterValue('custom_status', new IsMatchMode, 'active'),
+                new FilterValue('KoiCountFilter', new GreaterThanMatchMode, 15),
             ])
             ->getQuery()
             ->get();

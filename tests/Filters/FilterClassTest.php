@@ -106,7 +106,7 @@ class FilterClassTest extends TestCase
     public function test_filter_value_fluent_with_explicit_mode(): void
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)
-            ->mode(new AnyMatchMode())
+            ->mode(new AnyMatchMode)
             ->value(['active', 'pending']);
 
         $this->assertInstanceOf(AnyMatchMode::class, $filterValue->getMatchMode());

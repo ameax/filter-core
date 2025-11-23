@@ -70,7 +70,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('status', new IsMatchMode(), 'active'))
+            ->applyFilter(FilterValue::make('status', new IsMatchMode, 'active'))
             ->getQuery()
             ->get();
 
@@ -82,7 +82,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('status', new IsMatchMode(), ['active', 'pending']))
+            ->applyFilter(FilterValue::make('status', new IsMatchMode, ['active', 'pending']))
             ->getQuery()
             ->get();
 
@@ -93,7 +93,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('status', new IsNotMatchMode(), 'active'))
+            ->applyFilter(FilterValue::make('status', new IsNotMatchMode, 'active'))
             ->getQuery()
             ->get();
 
@@ -105,7 +105,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('status', new IsNotMatchMode(), ['active', 'pending']))
+            ->applyFilter(FilterValue::make('status', new IsNotMatchMode, ['active', 'pending']))
             ->getQuery()
             ->get();
 
@@ -117,7 +117,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('status', new AnyMatchMode(), ['active', 'inactive']))
+            ->applyFilter(FilterValue::make('status', new AnyMatchMode, ['active', 'inactive']))
             ->getQuery()
             ->get();
 
@@ -128,7 +128,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('status', new NoneMatchMode(), ['active', 'inactive']))
+            ->applyFilter(FilterValue::make('status', new NoneMatchMode, ['active', 'inactive']))
             ->getQuery()
             ->get();
 
@@ -140,7 +140,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('count', new GreaterThanMatchMode(), 10))
+            ->applyFilter(FilterValue::make('count', new GreaterThanMatchMode, 10))
             ->getQuery()
             ->get();
 
@@ -152,7 +152,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('count', new LessThanMatchMode(), 10))
+            ->applyFilter(FilterValue::make('count', new LessThanMatchMode, 10))
             ->getQuery()
             ->get();
 
@@ -164,7 +164,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('count', new BetweenMatchMode(), [5, 15]))
+            ->applyFilter(FilterValue::make('count', new BetweenMatchMode, [5, 15]))
             ->getQuery()
             ->get();
 
@@ -176,7 +176,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('count', new BetweenMatchMode(), ['min' => 5, 'max' => 15]))
+            ->applyFilter(FilterValue::make('count', new BetweenMatchMode, ['min' => 5, 'max' => 15]))
             ->getQuery()
             ->get();
 
@@ -190,7 +190,7 @@ class QueryApplicatorTest extends TestCase
 
         QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('count', new BetweenMatchMode(), 10));
+            ->applyFilter(FilterValue::make('count', new BetweenMatchMode, 10));
     }
 
     public function test_between_throws_exception_for_incomplete_array(): void
@@ -200,14 +200,14 @@ class QueryApplicatorTest extends TestCase
 
         QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('count', new BetweenMatchMode(), [10]));
+            ->applyFilter(FilterValue::make('count', new BetweenMatchMode, [10]));
     }
 
     public function test_applies_contains_match_mode(): void
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('name', new ContainsMatchMode(), 'Sh'))
+            ->applyFilter(FilterValue::make('name', new ContainsMatchMode, 'Sh'))
             ->getQuery()
             ->get();
 
@@ -219,7 +219,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('is_active', new IsMatchMode(), true))
+            ->applyFilter(FilterValue::make('is_active', new IsMatchMode, true))
             ->getQuery()
             ->get();
 
@@ -232,8 +232,8 @@ class QueryApplicatorTest extends TestCase
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
             ->applyFilters([
-                FilterValue::make('status', new IsMatchMode(), 'active'),
-                FilterValue::make('count', new GreaterThanMatchMode(), 5),
+                FilterValue::make('status', new IsMatchMode, 'active'),
+                FilterValue::make('count', new GreaterThanMatchMode, 5),
             ])
             ->getQuery()
             ->get();
@@ -249,7 +249,7 @@ class QueryApplicatorTest extends TestCase
 
         QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('undefined', new IsMatchMode(), 'value'));
+            ->applyFilter(FilterValue::make('undefined', new IsMatchMode, 'value'));
     }
 
     public function test_throws_exception_for_disallowed_match_mode(): void
@@ -259,7 +259,7 @@ class QueryApplicatorTest extends TestCase
                 key: 'status',
                 type: FilterTypeEnum::SELECT,
                 column: 'status',
-                allowedMatchModes: [new IsMatchMode()], // Only IS allowed
+                allowedMatchModes: [new IsMatchMode], // Only IS allowed
             ),
         ];
 
@@ -268,13 +268,13 @@ class QueryApplicatorTest extends TestCase
 
         QueryApplicator::for(Koi::query())
             ->withDefinitions($definitions)
-            ->applyFilter(FilterValue::make('status', new IsNotMatchMode(), 'active'));
+            ->applyFilter(FilterValue::make('status', new IsNotMatchMode, 'active'));
     }
 
     public function test_tracks_applied_filters(): void
     {
-        $filter1 = FilterValue::make('status', new IsMatchMode(), 'active');
-        $filter2 = FilterValue::make('count', new GreaterThanMatchMode(), 5);
+        $filter1 = FilterValue::make('status', new IsMatchMode, 'active');
+        $filter2 = FilterValue::make('count', new GreaterThanMatchMode, 5);
 
         $applicator = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
@@ -300,7 +300,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('variety', new EmptyMatchMode(), null))
+            ->applyFilter(FilterValue::make('variety', new EmptyMatchMode, null))
             ->getQuery()
             ->get();
 
@@ -312,7 +312,7 @@ class QueryApplicatorTest extends TestCase
     {
         $result = QueryApplicator::for(Koi::query())
             ->withDefinitions($this->getDefinitions())
-            ->applyFilter(FilterValue::make('variety', new NotEmptyMatchMode(), null))
+            ->applyFilter(FilterValue::make('variety', new NotEmptyMatchMode, null))
             ->getQuery()
             ->get();
 

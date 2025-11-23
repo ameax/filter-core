@@ -83,7 +83,7 @@ final class DynamicBooleanFilter extends Filter implements DynamicFilter
 
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     /**
@@ -92,7 +92,7 @@ final class DynamicBooleanFilter extends Filter implements DynamicFilter
     public function allowedModes(): array
     {
         return [
-            new IsMatchMode(),
+            new IsMatchMode,
         ];
     }
 

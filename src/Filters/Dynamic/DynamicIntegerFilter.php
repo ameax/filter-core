@@ -87,7 +87,7 @@ final class DynamicIntegerFilter extends Filter implements DynamicFilter
 
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     /**
@@ -96,11 +96,11 @@ final class DynamicIntegerFilter extends Filter implements DynamicFilter
     public function allowedModes(): array
     {
         return [
-            new IsMatchMode(),
-            new IsNotMatchMode(),
-            new GreaterThanMatchMode(),
-            new LessThanMatchMode(),
-            new BetweenMatchMode(),
+            new IsMatchMode,
+            new IsNotMatchMode,
+            new GreaterThanMatchMode,
+            new LessThanMatchMode,
+            new BetweenMatchMode,
         ];
     }
 

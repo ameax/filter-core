@@ -20,6 +20,6 @@ class ContainsMatchMode implements MatchModeContract
 
     public function apply(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
-        $query->where($column, 'like', '%' . $value . '%');
+        $query->where($column, 'like', '%'.$value.'%');
     }
 }

@@ -112,7 +112,7 @@ class TutorialTest extends TestCase
         // Step 4: Apply filter values with applyFilter()
         $result = QueryApplicator::for($query)
             ->withFilters([KoiStatusFilter::class])
-            ->applyFilter(new FilterValue('KoiStatusFilter', new IsMatchMode(), 'active'))
+            ->applyFilter(new FilterValue('KoiStatusFilter', new IsMatchMode, 'active'))
             ->getQuery()
             ->get();
 
@@ -160,7 +160,7 @@ class TutorialTest extends TestCase
     {
         $filterValue = new FilterValue(
             filterKey: 'KoiStatusFilter',
-            matchMode: new IsMatchMode(),
+            matchMode: new IsMatchMode,
             value: 'active'
         );
 
@@ -178,7 +178,7 @@ class TutorialTest extends TestCase
     public function test_2_2_syntax_variant_fluent_with_mode(): void
     {
         $filterValue = FilterValue::for(KoiStatusFilter::class)
-            ->mode(new IsMatchMode())
+            ->mode(new IsMatchMode)
             ->value('active');
 
         $result = Koi::query()->applyFilter($filterValue)->get();
@@ -223,10 +223,10 @@ class TutorialTest extends TestCase
     public function test_2_4_all_syntax_variants_produce_same_result(): void
     {
         // Variant A: Constructor (most verbose)
-        $variantA = new FilterValue('KoiStatusFilter', new IsMatchMode(), 'active');
+        $variantA = new FilterValue('KoiStatusFilter', new IsMatchMode, 'active');
 
         // Variant B: Fluent with explicit mode
-        $variantB = FilterValue::for(KoiStatusFilter::class)->mode(new IsMatchMode())->value('active');
+        $variantB = FilterValue::for(KoiStatusFilter::class)->mode(new IsMatchMode)->value('active');
 
         // Variant C: Fluent shorthand
         $variantC = FilterValue::for(KoiStatusFilter::class)->is('active');
@@ -372,7 +372,7 @@ class TutorialTest extends TestCase
         // Apply it via QueryApplicator (need to register it first)
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$dynamicStatusFilter])
-            ->applyFilter(new FilterValue('dynamic_status', new IsMatchMode(), 'active'))
+            ->applyFilter(new FilterValue('dynamic_status', new IsMatchMode, 'active'))
             ->getQuery()
             ->get();
 
@@ -393,7 +393,7 @@ class TutorialTest extends TestCase
         $dynamicFilter = SelectFilter::dynamic('status_filter')->withColumn('status');
         $dynamicResult = QueryApplicator::for(Koi::query())
             ->withFilters([$dynamicFilter])
-            ->applyFilter(new FilterValue('status_filter', new IsMatchMode(), 'active'))
+            ->applyFilter(new FilterValue('status_filter', new IsMatchMode, 'active'))
             ->getQuery()
             ->get();
 
@@ -419,8 +419,8 @@ class TutorialTest extends TestCase
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$selectFilter, $integerFilter])
             ->applyFilters([
-                new FilterValue('status', new IsMatchMode(), 'active'),
-                new FilterValue('count', new GreaterThanMatchMode(), 5),
+                new FilterValue('status', new IsMatchMode, 'active'),
+                new FilterValue('count', new GreaterThanMatchMode, 5),
             ])
             ->getQuery()
             ->get();
@@ -505,7 +505,7 @@ class TutorialTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$dynamicPondFilter])
-            ->applyFilter(new FilterValue('pond_water', new IsMatchMode(), 'fresh'))
+            ->applyFilter(new FilterValue('pond_water', new IsMatchMode, 'fresh'))
             ->getQuery()
             ->get();
 
@@ -618,7 +618,7 @@ class TutorialTest extends TestCase
         // Get specific filter value
         $statusFilter = $selection->get(KoiStatusFilter::class);
         $this->assertEquals('active', $statusFilter->getValue());
-        $this->assertEquals(new IsMatchMode(), $statusFilter->getMatchMode());
+        $this->assertEquals(new IsMatchMode, $statusFilter->getMatchMode());
 
         // Count filters
         $this->assertEquals(2, $selection->count());
@@ -895,8 +895,8 @@ class TutorialTest extends TestCase
         $result = QueryApplicator::for(Koi::query())
             ->withFilters($filters)
             ->applyFilters([
-                new FilterValue('status_filter', new IsMatchMode(), 'active'),
-                new FilterValue('count_filter', new GreaterThanMatchMode(), 5),
+                new FilterValue('status_filter', new IsMatchMode, 'active'),
+                new FilterValue('count_filter', new GreaterThanMatchMode, 5),
             ])
             ->getQuery()
             ->get();
@@ -923,8 +923,8 @@ class TutorialTest extends TestCase
                 $customFilter,           // Dynamic (runtime)
             ])
             ->applyFilters([
-                new FilterValue('KoiStatusFilter', new IsMatchMode(), 'active'),
-                new FilterValue('custom_count', new BetweenMatchMode(), ['min' => 5, 'max' => 15]),
+                new FilterValue('KoiStatusFilter', new IsMatchMode, 'active'),
+                new FilterValue('custom_count', new BetweenMatchMode, ['min' => 5, 'max' => 15]),
             ])
             ->getQuery()
             ->get();
@@ -952,18 +952,18 @@ class TutorialTest extends TestCase
     {
         // String "true" is sanitized to boolean true
         $boolFilter = KoiActiveFilter::make();
-        $this->assertTrue($boolFilter->sanitizeValue('true', new IsMatchMode()));
-        $this->assertTrue($boolFilter->sanitizeValue('1', new IsMatchMode()));
-        $this->assertTrue($boolFilter->sanitizeValue('yes', new IsMatchMode()));
-        $this->assertFalse($boolFilter->sanitizeValue('false', new IsMatchMode()));
-        $this->assertFalse($boolFilter->sanitizeValue('0', new IsMatchMode()));
+        $this->assertTrue($boolFilter->sanitizeValue('true', new IsMatchMode));
+        $this->assertTrue($boolFilter->sanitizeValue('1', new IsMatchMode));
+        $this->assertTrue($boolFilter->sanitizeValue('yes', new IsMatchMode));
+        $this->assertFalse($boolFilter->sanitizeValue('false', new IsMatchMode));
+        $this->assertFalse($boolFilter->sanitizeValue('0', new IsMatchMode));
 
         // String numbers are sanitized to integers
         $intFilter = KoiCountFilter::make();
-        $this->assertSame(123, $intFilter->sanitizeValue('123', new IsMatchMode()));
+        $this->assertSame(123, $intFilter->sanitizeValue('123', new IsMatchMode));
 
         // Arrays are converted to BetweenValue for BETWEEN mode
-        $betweenValue = $intFilter->sanitizeValue(['min' => 5, 'max' => 15], new BetweenMatchMode());
+        $betweenValue = $intFilter->sanitizeValue(['min' => 5, 'max' => 15], new BetweenMatchMode);
         $this->assertInstanceOf(BetweenValue::class, $betweenValue);
         $this->assertEquals(5, $betweenValue->min);
         $this->assertEquals(15, $betweenValue->max);
@@ -984,7 +984,7 @@ class TutorialTest extends TestCase
 
         QueryApplicator::for(Koi::query())
             ->withFilters([$boolFilter])
-            ->applyFilter(new FilterValue('KoiActiveFilter', new IsMatchMode(), 'banana'));
+            ->applyFilter(new FilterValue('KoiActiveFilter', new IsMatchMode, 'banana'));
     }
 
     /**
@@ -997,7 +997,7 @@ class TutorialTest extends TestCase
         // KoiStatusFilter only allows: active, inactive, pending
         QueryApplicator::for(Koi::query())
             ->withFilters([KoiStatusFilter::class])
-            ->applyFilter(new FilterValue('KoiStatusFilter', new IsMatchMode(), 'invalid_status'));
+            ->applyFilter(new FilterValue('KoiStatusFilter', new IsMatchMode, 'invalid_status'));
     }
 
     /**
@@ -1010,7 +1010,7 @@ class TutorialTest extends TestCase
 
             QueryApplicator::for(Koi::query())
                 ->withFilters([$boolFilter])
-                ->applyFilter(new FilterValue('KoiActiveFilter', new IsMatchMode(), 'invalid'));
+                ->applyFilter(new FilterValue('KoiActiveFilter', new IsMatchMode, 'invalid'));
 
             $this->fail('Expected FilterValidationException');
         } catch (FilterValidationException $e) {
@@ -1121,14 +1121,14 @@ class TutorialTest extends TestCase
     public function test_11_1_matchmode_classes(): void
     {
         // MatchModes are instantiated directly
-        $isMode = new IsMatchMode();
+        $isMode = new IsMatchMode;
         $this->assertEquals('is', $isMode->key());
 
-        $gtMode = new GreaterThanMatchMode();
+        $gtMode = new GreaterThanMatchMode;
         $this->assertEquals('gt', $gtMode->key());
 
         // Use in FilterValue
-        $filterValue = new FilterValue('KoiStatusFilter', new IsMatchMode(), 'active');
+        $filterValue = new FilterValue('KoiStatusFilter', new IsMatchMode, 'active');
         $this->assertInstanceOf(IsMatchMode::class, $filterValue->getMatchMode());
 
         // Or use fluent builder (recommended)

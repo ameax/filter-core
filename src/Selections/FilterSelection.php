@@ -30,7 +30,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public static function make(?string $name = null): self
     {
-        $selection = new self();
+        $selection = new self;
         $selection->name = $name;
 
         return $selection;
@@ -54,7 +54,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public static function fromArray(array $data): self
     {
-        $selection = new self();
+        $selection = new self;
         $selection->name = $data['name'] ?? null;
         $selection->description = $data['description'] ?? null;
 

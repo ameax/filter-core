@@ -85,7 +85,7 @@ final class DynamicTextFilter extends Filter implements DynamicFilter
 
     public function defaultMode(): MatchModeContract
     {
-        return new ContainsMatchMode();
+        return new ContainsMatchMode;
     }
 
     /**
@@ -94,9 +94,9 @@ final class DynamicTextFilter extends Filter implements DynamicFilter
     public function allowedModes(): array
     {
         return [
-            new ContainsMatchMode(),
-            new IsMatchMode(),
-            new IsNotMatchMode(),
+            new ContainsMatchMode,
+            new IsMatchMode,
+            new IsNotMatchMode,
         ];
     }
 

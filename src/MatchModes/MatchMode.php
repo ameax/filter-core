@@ -75,7 +75,7 @@ class MatchMode
             throw new InvalidArgumentException("Unknown match mode: {$key}");
         }
 
-        return new self::$modes[$key]();
+        return new self::$modes[$key];
     }
 
     /**
@@ -124,7 +124,7 @@ class MatchMode
         self::ensureDefaultsRegistered();
 
         if (isset(self::$modes[$name])) {
-            return new self::$modes[$name]();
+            return new self::$modes[$name];
         }
 
         throw new InvalidArgumentException("Unknown match mode: {$name}");

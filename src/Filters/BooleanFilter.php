@@ -29,13 +29,13 @@ abstract class BooleanFilter extends Filter
 
     public function defaultMode(): MatchModeContract
     {
-        return new IsMatchMode();
+        return new IsMatchMode;
     }
 
     public function allowedModes(): array
     {
         return [
-            new IsMatchMode(),
+            new IsMatchMode,
         ];
     }
 

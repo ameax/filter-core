@@ -49,7 +49,7 @@ final class FilterDefinition implements Arrayable, JsonSerializable
         }
 
         if ($this->defaultMatchMode === null) {
-            $this->defaultMatchMode = $this->allowedMatchModes[0] ?? new IsMatchMode();
+            $this->defaultMatchMode = $this->allowedMatchModes[0] ?? new IsMatchMode;
         }
 
         if ($this->label === null) {
@@ -87,7 +87,7 @@ final class FilterDefinition implements Arrayable, JsonSerializable
 
     public function getDefaultMatchMode(): MatchModeContract
     {
-        return $this->defaultMatchMode ?? new IsMatchMode();
+        return $this->defaultMatchMode ?? new IsMatchMode;
     }
 
     public function isNullable(): bool
@@ -145,31 +145,31 @@ final class FilterDefinition implements Arrayable, JsonSerializable
     {
         $modes = match ($this->type) {
             FilterTypeEnum::SELECT => [
-                new IsMatchMode(),
-                new IsNotMatchMode(),
-                new AnyMatchMode(),
-                new NoneMatchMode(),
+                new IsMatchMode,
+                new IsNotMatchMode,
+                new AnyMatchMode,
+                new NoneMatchMode,
             ],
             FilterTypeEnum::INTEGER => [
-                new IsMatchMode(),
-                new IsNotMatchMode(),
-                new GreaterThanMatchMode(),
-                new LessThanMatchMode(),
-                new BetweenMatchMode(),
+                new IsMatchMode,
+                new IsNotMatchMode,
+                new GreaterThanMatchMode,
+                new LessThanMatchMode,
+                new BetweenMatchMode,
             ],
             FilterTypeEnum::TEXT => [
-                new ContainsMatchMode(),
-                new IsMatchMode(),
-                new IsNotMatchMode(),
+                new ContainsMatchMode,
+                new IsMatchMode,
+                new IsNotMatchMode,
             ],
             FilterTypeEnum::BOOLEAN => [
-                new IsMatchMode(),
+                new IsMatchMode,
             ],
         };
 
         if ($this->nullable) {
-            $modes[] = new EmptyMatchMode();
-            $modes[] = new NotEmptyMatchMode();
+            $modes[] = new EmptyMatchMode;
+            $modes[] = new NotEmptyMatchMode;
         }
 
         return $modes;
