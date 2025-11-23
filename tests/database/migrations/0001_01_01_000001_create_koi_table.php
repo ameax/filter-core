@@ -23,6 +23,9 @@ return new class extends Migration
             // BOOLEAN: yes/no
             $table->boolean('is_active')->default(true);
 
+            // Nullable field for EMPTY/NOT_EMPTY tests
+            $table->string('variety')->nullable();
+
             $table->timestamps();
         });
     }

@@ -81,8 +81,8 @@ src/
 │   ├── Selection.php
 │   └── FilterGroup.php
 │
-├── Query/                       □ Geplant
-│   └── QueryApplicator.php
+├── Query/
+│   └── QueryApplicator.php      ✓ Implementiert (Eloquent Builder)
 │
 └── Filters/                     □ Geplant (Phase 1)
     ├── SelectFilter.php
@@ -93,6 +93,8 @@ src/
 tests/
 ├── Models/
 │   └── Koi.php                  ✓ Test-Model mit allen Phase 1 Typen
+├── Query/
+│   └── QueryApplicatorTest.php  ✓ 21 Tests für alle Match-Modi
 └── database/migrations/
     └── create_koi_table.php     ✓ Test-Migration
 ```
@@ -139,16 +141,32 @@ $selection = Selection::make('Aktive Premium-Kunden')
     });
 ```
 
-### 4. Query Applicator
+### 4. Query Applicator ✓
 
-Der Applicator wendet Filter auf verschiedene Datenquellen an:
+Der Applicator wendet Filter auf Eloquent Queries an:
 
 ```php
-// Auf Eloquent Query
-$users = QueryApplicator::apply(User::query(), $selection);
+use Ameax\FilterCore\Query\QueryApplicator;
+use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\Enums\MatchModeEnum;
 
-// Auf Collection
-$filtered = QueryApplicator::applyToCollection($collection, $selection);
+// QueryApplicator mit FilterDefinitions erstellen
+$applicator = QueryApplicator::for(User::query())
+    ->withDefinitions($filterDefinitions);
+
+// Einzelnen Filter anwenden
+$applicator->applyFilter(
+    FilterValue::make('status', MatchModeEnum::IS, 'active')
+);
+
+// Mehrere Filter anwenden
+$applicator->applyFilters([
+    FilterValue::make('status', MatchModeEnum::IS, 'active'),
+    FilterValue::make('count', MatchModeEnum::GREATER_THAN, 10),
+]);
+
+// Query abrufen und ausführen
+$users = $applicator->getQuery()->get();
 ```
 
 ## Weiterführende Dokumentation

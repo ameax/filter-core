@@ -4,8 +4,8 @@
 
 Das Query-Integrations-System ermöglicht die Anwendung von Filtern auf verschiedene Datenquellen:
 
-1. **Eloquent Builder** - Für Datenbank-Queries
-2. **Collection** - Für In-Memory-Filterung
+1. **Eloquent Builder** - Für Datenbank-Queries ✓ Implementiert
+2. **Collection** - Für In-Memory-Filterung (geplant)
 
 ## Architektur
 

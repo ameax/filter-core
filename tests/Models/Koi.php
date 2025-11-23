@@ -11,6 +11,7 @@ class Koi extends Model
         'count',
         'name',
         'is_active',
+        'variety',
     ];
 
     protected $casts = [
