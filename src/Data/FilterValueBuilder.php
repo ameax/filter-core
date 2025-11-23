@@ -4,6 +4,7 @@ namespace Ameax\FilterCore\Data;
 
 use Ameax\FilterCore\Enums\MatchModeEnum;
 use Ameax\FilterCore\Filters\Filter;
+use Ameax\FilterCore\Selections\FilterSelection;
 
 /**
  * Fluent builder for creating FilterValue instances.
@@ -21,6 +22,7 @@ final class FilterValueBuilder
      */
     public function __construct(
         protected string $filterClass,
+        protected ?FilterSelection $selection = null,
     ) {}
 
     /**
@@ -36,16 +38,26 @@ final class FilterValueBuilder
     /**
      * Build the FilterValue with the given value.
      * Uses the filter's default mode if not explicitly set.
+     *
+     * Returns FilterSelection if called from a selection context, otherwise FilterValue.
      */
-    public function value(mixed $value): FilterValue
+    public function value(mixed $value): FilterValue|FilterSelection
     {
         $mode = $this->mode ?? $this->getDefaultMode();
 
-        return new FilterValue(
+        $filterValue = new FilterValue(
             $this->filterClass::key(),
             $mode,
             $value,
         );
+
+        if ($this->selection !== null) {
+            $this->selection->addFromBuilder($filterValue);
+
+            return $this->selection;
+        }
+
+        return $filterValue;
     }
 
     // Shorthand methods for common match modes
@@ -53,7 +65,7 @@ final class FilterValueBuilder
     /**
      * IS match mode.
      */
-    public function is(mixed $value): FilterValue
+    public function is(mixed $value): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::IS)->value($value);
     }
@@ -61,7 +73,7 @@ final class FilterValueBuilder
     /**
      * IS_NOT match mode.
      */
-    public function isNot(mixed $value): FilterValue
+    public function isNot(mixed $value): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::IS_NOT)->value($value);
     }
@@ -71,7 +83,7 @@ final class FilterValueBuilder
      *
      * @param  array<mixed>  $values
      */
-    public function any(array $values): FilterValue
+    public function any(array $values): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::ANY)->value($values);
     }
@@ -81,7 +93,7 @@ final class FilterValueBuilder
      *
      * @param  array<mixed>  $values
      */
-    public function none(array $values): FilterValue
+    public function none(array $values): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::NONE)->value($values);
     }
@@ -89,7 +101,7 @@ final class FilterValueBuilder
     /**
      * GREATER_THAN match mode.
      */
-    public function greaterThan(int|float $value): FilterValue
+    public function greaterThan(int|float $value): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::GREATER_THAN)->value($value);
     }
@@ -97,7 +109,7 @@ final class FilterValueBuilder
     /**
      * LESS_THAN match mode.
      */
-    public function lessThan(int|float $value): FilterValue
+    public function lessThan(int|float $value): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::LESS_THAN)->value($value);
     }
@@ -105,7 +117,7 @@ final class FilterValueBuilder
     /**
      * BETWEEN match mode.
      */
-    public function between(int|float $min, int|float $max): FilterValue
+    public function between(int|float $min, int|float $max): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::BETWEEN)->value(['min' => $min, 'max' => $max]);
     }
@@ -113,7 +125,7 @@ final class FilterValueBuilder
     /**
      * CONTAINS match mode.
      */
-    public function contains(string $value): FilterValue
+    public function contains(string $value): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::CONTAINS)->value($value);
     }
@@ -121,7 +133,7 @@ final class FilterValueBuilder
     /**
      * EMPTY match mode.
      */
-    public function empty(): FilterValue
+    public function empty(): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::EMPTY)->value(null);
     }
@@ -129,7 +141,7 @@ final class FilterValueBuilder
     /**
      * NOT_EMPTY match mode.
      */
-    public function notEmpty(): FilterValue
+    public function notEmpty(): FilterValue|FilterSelection
     {
         return $this->mode(MatchModeEnum::NOT_EMPTY)->value(null);
     }

@@ -5,6 +5,7 @@ namespace Ameax\FilterCore\Concerns;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\Query\QueryApplicator;
+use Ameax\FilterCore\Selections\FilterSelection;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -70,20 +71,26 @@ trait Filterable
     }
 
     /**
-     * Scope to apply multiple filter values.
+     * Scope to apply multiple filter values or a FilterSelection.
      *
      * @param  Builder<static>  $query
-     * @param  array<FilterValue>  $filterValues
+     * @param  array<FilterValue>|FilterSelection  $filters
      * @return Builder<static>
      *
      * @example
+     * // With array
      * Koi::query()->applyFilters([
      *     FilterValue::for(StatusFilter::class)->is('active'),
      *     FilterValue::for(CountFilter::class)->greaterThan(10),
      * ])->get();
+     *
+     * // With FilterSelection
+     * Koi::query()->applyFilters($selection)->get();
      */
-    public function scopeApplyFilters(Builder $query, array $filterValues): Builder
+    public function scopeApplyFilters(Builder $query, array|FilterSelection $filters): Builder
     {
+        $filterValues = $filters instanceof FilterSelection ? $filters->all() : $filters;
+
         if (empty($filterValues)) {
             return $query;
         }
