@@ -1,12 +1,12 @@
 <?php
 
-namespace VendorName\Skeleton\Commands;
+namespace Ameax\FilterCore\Commands;
 
 use Illuminate\Console\Command;
 
-class SkeletonCommand extends Command
+class FilterCoreCommand extends Command
 {
-    public $signature = 'skeleton';
+    public $signature = 'filter-core';
 
     public $description = 'My command';
 
