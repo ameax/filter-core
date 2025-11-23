@@ -47,6 +47,13 @@ class TestCase extends Orchestra
 
     protected function setUpDatabase(): void
     {
+        // Allow skipping migrations via MIGRATED=true env variable
+        $isMigrated = (bool) env('MIGRATED');
+
+        if (! RefreshDatabaseState::$migrated) {
+            RefreshDatabaseState::$migrated = $isMigrated;
+        }
+
         if (! RefreshDatabaseState::$migrated) {
             $this->dropAllTables();
             $this->runMigrations();

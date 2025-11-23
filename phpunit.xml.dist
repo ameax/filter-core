@@ -35,5 +35,7 @@
         <env name="DB_DATABASE" value="filter_core_testing"/>
         <env name="DB_USERNAME" value="root"/>
         <env name="DB_PASSWORD" value=""/>
+        <!-- Set MIGRATED=true to skip migrations and reuse existing schema -->
+        <!-- <env name="MIGRATED" value="true"/> -->
     </php>
 </phpunit>
