@@ -1,5 +1,21 @@
 # Match-Modi
 
+## Phase 1 Implementierung
+
+**Aktive Modi:**
+- `IS`, `IS_NOT` - Gleichheit
+- `ANY`, `NONE` - Multi-Value (für SELECT mit mehreren Filter-Werten)
+- `GREATER_THAN`, `LESS_THAN`, `BETWEEN` - Zahlenvergleich
+- `CONTAINS` - Textsuche
+- `EMPTY`, `NOT_EMPTY` - Null-Handling
+
+**Phase 2 (geplant):**
+- `ALL` - Alle Werte müssen passen (für MULTI_SELECT)
+- `GREATER_THAN_OR_EQUAL`, `LESS_THAN_OR_EQUAL`
+- `STARTS_WITH`, `ENDS_WITH`
+
+---
+
 ## Übersicht
 
 Match-Modi definieren **WIE** ein Filter-Wert mit den Daten verglichen wird. Jeder Match-Modus implementiert eine spezifische Vergleichslogik.

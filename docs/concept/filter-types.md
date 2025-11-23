@@ -1,5 +1,21 @@
 # Filter-Typen
 
+## Phase 1 Implementierung
+
+**Aktive Typen:**
+- `SELECT` - Einzelwert-Auswahl (Dropdown)
+- `INTEGER` - Ganzzahlen
+- `TEXT` - Freitext-Suche
+- `BOOLEAN` - Ja/Nein
+
+**Phase 2 (geplant):**
+- `MULTI_SELECT` - Mehrfachwert-Spalten (JSON/CSV)
+- `DECIMAL` - Dezimalzahlen
+- `DATE` - Datum
+- `DATETIME` - Datum & Uhrzeit
+
+---
+
 ## Übersicht
 
 Filter-Typen definieren die Art der Daten, die gefiltert werden sollen, und bestimmen welche Match-Modi verfügbar sind.

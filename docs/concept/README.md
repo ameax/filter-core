@@ -39,12 +39,18 @@ Das bestehende Filter-System in `Support\Filters` bietet bereits:
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
 │  │ Filter Types │  │ Match Modes  │  │ Selection Groups     │   │
 │  │              │  │              │  │                      │   │
-│  │ - Select     │  │ - IS         │  │ - AND/OR Logic       │   │
-│  │ - MultiSelect│  │ - IS_NOT     │  │ - Nested Groups      │   │
-│  │ - Number     │  │ - ANY        │  │ - Persistence        │   │
-│  │ - Date       │  │ - ALL        │  │                      │   │
-│  │ - Text       │  │ - NONE       │  │                      │   │
+│  │ Phase 1:     │  │ Phase 1:     │  │ - AND/OR Logic       │   │
+│  │ - Select     │  │ - IS, IS_NOT │  │ - Nested Groups      │   │
+│  │ - Integer    │  │ - ANY, NONE  │  │ - Persistence        │   │
+│  │ - Text       │  │ - GT, LT     │  │                      │   │
 │  │ - Boolean    │  │ - BETWEEN    │  │                      │   │
+│  │              │  │ - CONTAINS   │  │                      │   │
+│  │ Phase 2:     │  │ - EMPTY      │  │                      │   │
+│  │ - MultiSelect│  │              │  │                      │   │
+│  │ - Decimal    │  │ Phase 2:     │  │                      │   │
+│  │ - Date       │  │ - ALL        │  │                      │   │
+│  │ - DateTime   │  │ - GTE, LTE   │  │                      │   │
+│  │              │  │ - STARTS/END │  │                      │   │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────────────────────────────────────────────┐   │
@@ -61,70 +67,34 @@ Das bestehende Filter-System in `Support\Filters` bietet bereits:
 ### filter-core (Hauptpaket)
 
 ```
-packages/filter-core/
-├── src/
-│   ├── Contracts/
-│   │   ├── FilterContract.php
-│   │   ├── FilterTypeContract.php
-│   │   ├── MatchModeContract.php
-│   │   ├── SelectionContract.php
-│   │   ├── FilterGroupContract.php
-│   │   └── QueryApplicatorContract.php
-│   │
-│   ├── Filters/
-│   │   ├── AbstractFilter.php
-│   │   ├── SelectFilter.php
-│   │   ├── MultiSelectFilter.php
-│   │   ├── NumberFilter.php
-│   │   ├── DateFilter.php
-│   │   ├── DateRangeFilter.php
-│   │   ├── TextFilter.php
-│   │   └── BooleanFilter.php
-│   │
-│   ├── MatchModes/
-│   │   ├── AbstractMatchMode.php
-│   │   ├── IsMatchMode.php
-│   │   ├── IsNotMatchMode.php
-│   │   ├── AnyMatchMode.php
-│   │   ├── AllMatchMode.php
-│   │   ├── NoneMatchMode.php
-│   │   ├── BetweenMatchMode.php
-│   │   ├── GreaterThanMatchMode.php
-│   │   ├── LessThanMatchMode.php
-│   │   ├── ContainsMatchMode.php
-│   │   └── EmptyMatchMode.php
-│   │
-│   ├── Selections/
-│   │   ├── Selection.php
-│   │   ├── FilterGroup.php
-│   │   ├── SelectionRepository.php
-│   │   └── SelectionSerializer.php
-│   │
-│   ├── Query/
-│   │   ├── QueryApplicator.php
-│   │   ├── EloquentApplicator.php
-│   │   └── CollectionApplicator.php
-│   │
-│   ├── Data/
-│   │   ├── FilterDefinition.php
-│   │   ├── FilterValue.php
-│   │   ├── FilterState.php
-│   │   └── SelectionData.php
-│   │
-│   └── Enums/
-│       ├── FilterTypeEnum.php
-│       ├── MatchModeEnum.php
-│       ├── GroupOperatorEnum.php
-│       └── ValueTypeEnum.php
+src/
+├── Data/
+│   ├── FilterDefinition.php     ✓ Implementiert
+│   └── FilterValue.php          ✓ Implementiert
 │
-├── config/
-│   └── filter.php
+├── Enums/
+│   ├── FilterTypeEnum.php       ✓ Implementiert (Phase 1: SELECT, INTEGER, TEXT, BOOLEAN)
+│   ├── MatchModeEnum.php        ✓ Implementiert (Phase 1: IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY, NOT_EMPTY)
+│   └── GroupOperatorEnum.php    ✓ Implementiert (AND, OR)
 │
-├── database/
-│   └── migrations/
-│       └── create_selections_table.php
+├── Selections/                  □ Geplant
+│   ├── Selection.php
+│   └── FilterGroup.php
 │
-└── tests/
+├── Query/                       □ Geplant
+│   └── QueryApplicator.php
+│
+└── Filters/                     □ Geplant (Phase 1)
+    ├── SelectFilter.php
+    ├── IntegerFilter.php
+    ├── TextFilter.php
+    └── BooleanFilter.php
+
+tests/
+├── Models/
+│   └── Koi.php                  ✓ Test-Model mit allen Phase 1 Typen
+└── database/migrations/
+    └── create_koi_table.php     ✓ Test-Migration
 ```
 
 ## Kern-Konzepte
