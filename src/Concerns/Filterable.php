@@ -63,6 +63,56 @@ trait Filterable
     }
 
     /**
+     * Get a filter by its key.
+     */
+    public static function getFilterByKey(string $key): ?Filter
+    {
+        foreach (static::getFilters() as $filter) {
+            if ($filter->resolveKey() === $key) {
+                return $filter;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Get all filter keys for this model.
+     *
+     * @return array<string>
+     */
+    public static function getFilterKeys(): array
+    {
+        return array_map(
+            fn (Filter $filter) => $filter->resolveKey(),
+            static::getFilters()
+        );
+    }
+
+    /**
+     * Validate a selection against this model's filters.
+     *
+     * @return array{valid: bool, unknown: array<string>, known: array<string>}
+     */
+    public static function validateSelection(FilterSelection $selection): array
+    {
+        $modelKeys = static::getFilterKeys();
+        $selectionKeys = array_map(
+            fn (FilterValue $fv) => $fv->getFilterKey(),
+            $selection->all()
+        );
+
+        $unknown = array_diff($selectionKeys, $modelKeys);
+        $known = array_intersect($selectionKeys, $modelKeys);
+
+        return [
+            'valid' => empty($unknown),
+            'unknown' => array_values($unknown),
+            'known' => array_values($known),
+        ];
+    }
+
+    /**
      * Clear the cached filters (useful for testing).
      */
     public static function clearFilterCache(): void
@@ -72,6 +122,8 @@ trait Filterable
 
     /**
      * Scope to apply multiple filter values or a FilterSelection.
+     *
+     * For FilterSelection with nested groups (AND/OR logic), use applySelection() instead.
      *
      * @param  Builder<static>  $query
      * @param  array<FilterValue>|FilterSelection  $filters
@@ -84,11 +136,16 @@ trait Filterable
      *     FilterValue::for(CountFilter::class)->greaterThan(10),
      * ])->get();
      *
-     * // With FilterSelection
+     * // With FilterSelection (simple AND logic)
      * Koi::query()->applyFilters($selection)->get();
      */
     public function scopeApplyFilters(Builder $query, array|FilterSelection $filters): Builder
     {
+        // For FilterSelection with nested groups, delegate to applySelection
+        if ($filters instanceof FilterSelection && $filters->hasNestedGroups()) {
+            return $this->scopeApplySelection($query, $filters);
+        }
+
         $filterValues = $filters instanceof FilterSelection ? $filters->all() : $filters;
 
         if (empty($filterValues)) {
@@ -116,5 +173,65 @@ trait Filterable
     public function scopeApplyFilter(Builder $query, FilterValue $filterValue): Builder
     {
         return $this->scopeApplyFilters($query, [$filterValue]);
+    }
+
+    /**
+     * Scope to apply a FilterSelection with optional strict mode.
+     *
+     * This method properly handles nested AND/OR groups.
+     * When strict is false, unknown filters are silently ignored.
+     *
+     * @param  Builder<static>  $query
+     * @param  bool  $strict  If false, unknown filters are silently ignored
+     * @return Builder<static>
+     *
+     * @example
+     * // Strict mode (default) - throws exception on unknown filters
+     * Koi::query()->applySelection($selection)->get();
+     *
+     * // Tolerant mode - ignores unknown filters
+     * Koi::query()->applySelection($selection, strict: false)->get();
+     *
+     * // With OR logic
+     * $selection = FilterSelection::make()
+     *     ->where(StatusFilter::class)->is('active')
+     *     ->orWhere(fn($g) => $g->where(StatusFilter::class)->is('pending'));
+     * Koi::query()->applySelection($selection)->get();
+     */
+    public function scopeApplySelection(
+        Builder $query,
+        FilterSelection $selection,
+        bool $strict = true
+    ): Builder {
+        if (! $selection->hasFilters()) {
+            return $query;
+        }
+
+        // In non-strict mode, we need to filter out unknown filters
+        // For now, non-strict mode only works with flat selections
+        if (! $strict && ! $selection->hasNestedGroups()) {
+            $validKeys = static::getFilterKeys();
+            $validFilters = array_filter(
+                $selection->all(),
+                fn (FilterValue $fv) => in_array($fv->getFilterKey(), $validKeys, true)
+            );
+
+            if (empty($validFilters)) {
+                return $query;
+            }
+
+            $applicator = QueryApplicator::for($query)
+                ->withFilters(static::getFilters())
+                ->applyFilters($validFilters);
+
+            return $applicator->getQuery();
+        }
+
+        // Use the full group-based application for complex selections
+        $applicator = QueryApplicator::for($query)
+            ->withFilters(static::getFilters())
+            ->applySelection($selection);
+
+        return $applicator->getQuery();
     }
 }

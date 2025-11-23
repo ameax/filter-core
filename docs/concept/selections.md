@@ -4,6 +4,8 @@
 
 Selektionen ermöglichen die Kombination mehrerer Filter mit logischen Operatoren (AND/OR) und die Persistierung dieser Kombinationen für spätere Wiederverwendung.
 
+**Status:** ✅ Vollständig implementiert inkl. OR-Logik und verschachtelter Gruppen.
+
 ## Konzepte
 
 ### FilterValue
@@ -14,7 +16,7 @@ Ein einzelner Filter-Wert mit Match-Modus:
 FilterValue = Filter + MatchMode + Value
 ```
 
-### FilterGroup
+### FilterGroup ✅ Implementiert
 
 Eine Gruppe von FilterValues oder verschachtelten FilterGroups mit einem Operator:
 
@@ -22,13 +24,19 @@ Eine Gruppe von FilterValues oder verschachtelten FilterGroups mit einem Operato
 FilterGroup = Operator (AND|OR) + [FilterValue | FilterGroup, ...]
 ```
 
-### Selection
+**Klassen:**
+- `Ameax\FilterCore\Selections\FilterGroup`
+- `Ameax\FilterCore\Selections\FilterGroupBuilder`
+
+### FilterSelection ✅ Implementiert
 
 Eine benannte, persistierbare Sammlung von FilterGroups:
 
 ```
-Selection = Name + Beschreibung + FilterGroup + Metadaten
+FilterSelection = Name + Beschreibung + Root FilterGroup
 ```
+
+**Klasse:** `Ameax\FilterCore\Selections\FilterSelection`
 
 ---
 
@@ -1092,3 +1100,194 @@ protected $listen = [
     ],
 ];
 ```
+
+---
+
+## Aktuelle Implementierung (filter-core)
+
+Die folgenden Beispiele zeigen die **tatsächlich implementierte API** in `Ameax\FilterCore`.
+
+### Einfache AND-Logik (Standard)
+
+```php
+use Ameax\FilterCore\Selections\FilterSelection;
+use Ameax\FilterCore\Data\FilterValue;
+use App\Filters\KoiStatusFilter;
+use App\Filters\KoiCountFilter;
+
+// Standard: Alle Filter werden mit AND verknüpft
+$selection = FilterSelection::make('Aktive Kois')
+    ->where(KoiStatusFilter::class)->is('active')
+    ->where(KoiCountFilter::class)->greaterThan(5);
+
+// Generiert: status = 'active' AND count > 5
+
+$kois = Koi::query()->applySelection($selection)->get();
+```
+
+### Einfache OR-Logik
+
+```php
+use Ameax\FilterCore\Selections\FilterSelection;
+
+// Top-Level OR: Alle Filter werden mit OR verknüpft
+$selection = FilterSelection::makeOr()
+    ->where(KoiStatusFilter::class)->is('active')
+    ->where(KoiStatusFilter::class)->is('pending');
+
+// Generiert: status = 'active' OR status = 'pending'
+
+$kois = Koi::query()->applySelection($selection)->get();
+```
+
+### Verschachtelte OR-Gruppe in AND
+
+```php
+use Ameax\FilterCore\Selections\FilterSelection;
+use Ameax\FilterCore\Selections\FilterGroup;
+
+// count > 5 AND (status = 'active' OR status = 'pending')
+$selection = FilterSelection::make()
+    ->where(KoiCountFilter::class)->greaterThan(5)
+    ->orWhere(function (FilterGroup $g) {
+        $g->where(KoiStatusFilter::class)->is('active');
+        $g->where(KoiStatusFilter::class)->is('pending');
+    });
+```
+
+### Komplexe verschachtelte Gruppen
+
+```php
+// (status = 'active' AND count > 15) OR (status = 'pending')
+$selection = FilterSelection::makeOr()
+    ->andWhere(function (FilterGroup $g) {
+        $g->where(KoiStatusFilter::class)->is('active');
+        $g->where(KoiCountFilter::class)->greaterThan(15);
+    })
+    ->andWhere(function (FilterGroup $g) {
+        $g->where(KoiStatusFilter::class)->is('pending');
+    });
+```
+
+### Tief verschachtelte Gruppen
+
+```php
+// count > 4 AND ((status = 'active' AND count > 10) OR (status = 'inactive'))
+$selection = FilterSelection::make()
+    ->where(KoiCountFilter::class)->greaterThan(4)
+    ->orWhere(function (FilterGroup $or) {
+        $or->andWhere(function (FilterGroup $and) {
+            $and->where(KoiStatusFilter::class)->is('active');
+            $and->where(KoiCountFilter::class)->greaterThan(10);
+        });
+        $or->andWhere(function (FilterGroup $and) {
+            $and->where(KoiStatusFilter::class)->is('inactive');
+        });
+    });
+```
+
+### JSON-Serialisierung
+
+```php
+// Einfache AND-Selektion → Legacy-Format (abwärtskompatibel)
+$simple = FilterSelection::make()
+    ->where(KoiStatusFilter::class)->is('active');
+
+$simple->toJson();
+// {"name":null,"description":null,"filters":[{"filter":"KoiStatusFilter","mode":"is","value":"active"}]}
+
+// Komplexe Selektion mit Gruppen → Neues Group-Format
+$complex = FilterSelection::make()
+    ->where(KoiStatusFilter::class)->is('active')
+    ->orWhere(fn($g) => $g->where(KoiStatusFilter::class)->is('pending'));
+
+$complex->toJson();
+// {"name":null,"description":null,"group":{"operator":"and","items":[...]}}
+
+// Beide Formate werden bei fromJson() automatisch erkannt
+$restored = FilterSelection::fromJson($json);
+```
+
+### Model-Integration mit Filterable Trait
+
+```php
+use App\Models\Koi;
+
+// Model definiert verfügbare Filter
+class Koi extends Model
+{
+    use Filterable;
+
+    protected static function filterResolver(): Closure
+    {
+        return fn() => [
+            KoiStatusFilter::class,
+            KoiCountFilter::class,
+            PondWaterTypeFilter::via('pond'),
+        ];
+    }
+}
+
+// Anwendung mit Selection
+$selection = FilterSelection::make()
+    ->where(KoiStatusFilter::class)->is('active')
+    ->orWhere(fn($g) => $g->where(PondWaterTypeFilter::class)->is('fresh'));
+
+$kois = Koi::query()->applySelection($selection)->get();
+
+// Validierung vor Anwendung
+$result = Koi::validateSelection($selection);
+// ['valid' => true, 'unknown' => [], 'known' => ['KoiStatusFilter', 'PondWaterTypeFilter']]
+
+// Toleranter Modus (ignoriert unbekannte Filter)
+$kois = Koi::query()->applySelection($selection, strict: false)->get();
+```
+
+### FilterGroup direkt verwenden
+
+```php
+use Ameax\FilterCore\Selections\FilterGroup;
+
+// AND-Gruppe erstellen
+$andGroup = FilterGroup::and()
+    ->where(KoiStatusFilter::class)->is('active')
+    ->where(KoiCountFilter::class)->greaterThan(5);
+
+// OR-Gruppe erstellen
+$orGroup = FilterGroup::or()
+    ->where(KoiStatusFilter::class)->is('active')
+    ->where(KoiStatusFilter::class)->is('pending');
+
+// Verschachtelte Gruppen
+$group = FilterGroup::and()
+    ->where(KoiCountFilter::class)->greaterThan(0)
+    ->orWhere(fn($g) => $g
+        ->where(KoiStatusFilter::class)->is('active')
+        ->where(KoiStatusFilter::class)->is('pending')
+    );
+
+// Inspektion
+$group->getOperator();           // GroupOperatorEnum::AND
+$group->count();                 // 2
+$group->hasNestedGroups();       // true
+$group->getAllFilterValues();    // [FilterValue, FilterValue, ...]
+$group->getAllFilterKeys();      // ['KoiCountFilter', 'KoiStatusFilter']
+```
+
+### API-Referenz
+
+| Klasse | Methode | Beschreibung |
+|--------|---------|--------------|
+| `FilterSelection` | `make(?string $name)` | Erstellt AND-Selection |
+| `FilterSelection` | `makeOr(?string $name)` | Erstellt OR-Selection |
+| `FilterSelection` | `where(FilterClass)->mode(value)` | Fügt Filter hinzu |
+| `FilterSelection` | `orWhere(callable)` | Fügt OR-Gruppe hinzu |
+| `FilterSelection` | `andWhere(callable)` | Fügt AND-Gruppe hinzu |
+| `FilterSelection` | `getGroup()` | Gibt Root-FilterGroup zurück |
+| `FilterSelection` | `hasNestedGroups()` | Prüft auf komplexe Logik |
+| `FilterSelection` | `toJson()` / `fromJson()` | Serialisierung |
+| `FilterGroup` | `and()` / `or()` | Factory-Methoden |
+| `FilterGroup` | `where(FilterClass)->mode(value)` | Fügt Filter hinzu |
+| `FilterGroup` | `orWhere(callable)` / `andWhere(callable)` | Verschachtelung |
+| `FilterGroup` | `getAllFilterValues()` | Alle FilterValues (flach) |
+| `FilterGroup` | `getAllFilterKeys()` | Alle eindeutigen Keys |

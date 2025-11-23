@@ -12,8 +12,11 @@ The following issues from this analysis have been addressed:
 | **2.1 Closed Match Mode System** | RESOLVED | `MatchModeContract` interface + class-based MatchModes |
 | **2.2 No Custom Filter Logic** | RESOLVED | `Filter::apply()` method allows custom query logic |
 | **2.4 No Filter Transformation** | RESOLVED | `Filter::sanitizeValue()` for input transformation |
+| **3.1 Only AND Logic** | RESOLVED | `FilterGroup` class with AND/OR operators |
+| **3.3 Limited Relation Support** | RESOLVED | `RelationModeEnum` + `viaDoesntHave()`, `withoutRelation()` |
 | **5.1 No Value Type Validation** | RESOLVED | `Filter::validationRules()` with Laravel Validator |
 | **5.2 No Options Validation** | RESOLVED | `SelectFilter` validates against defined options |
+| **7.4 No Filter Discovery** | RESOLVED | `getFilterByKey()`, `getFilterKeys()`, `validateSelection()` |
 | **Type Safety** | RESOLVED | `Filter::typedValue()` with strict PHP types |
 | **Range Values** | RESOLVED | `BetweenValue` DTO for type-safe min/max |
 
@@ -266,36 +269,81 @@ abstract class Filter {
 
 ## 3. Flexibility Deficits
 
-### 3.1 Only AND Logic
+### 3.1 Only AND Logic ✅ RESOLVED
+
+**Original Problem:** No OR groups, no nested conditions - only AND logic between filters.
+
+**Solution Implemented:** `FilterGroup` class with full AND/OR support and unlimited nesting.
 
 ```php
-FilterSelection::make()
+// Simple OR logic
+$selection = FilterSelection::makeOr()
     ->where(StatusFilter::class)->is('active')
-    ->where(CountFilter::class)->greaterThan(5);
+    ->where(StatusFilter::class)->is('pending');
+// Generates: status = 'active' OR status = 'pending'
 
-// Generates: status = 'active' AND count > 5
+// Nested OR within AND
+$selection = FilterSelection::make()
+    ->where(CountFilter::class)->greaterThan(5)
+    ->orWhere(function (FilterGroup $g) {
+        $g->where(StatusFilter::class)->is('active');
+        $g->where(StatusFilter::class)->is('pending');
+    });
+// Generates: count > 5 AND (status = 'active' OR status = 'pending')
+
+// Complex nested: (A AND B) OR (C AND D)
+$selection = FilterSelection::makeOr()
+    ->andWhere(function (FilterGroup $g) {
+        $g->where(StatusFilter::class)->is('active');
+        $g->where(CountFilter::class)->greaterThan(15);
+    })
+    ->andWhere(function (FilterGroup $g) {
+        $g->where(StatusFilter::class)->is('pending');
+    });
+// Generates: (status = 'active' AND count > 15) OR (status = 'pending')
+
+// Deeply nested groups supported
+$selection = FilterSelection::make()
+    ->where(CountFilter::class)->greaterThan(4)
+    ->orWhere(function (FilterGroup $or) {
+        $or->andWhere(function (FilterGroup $and) {
+            $and->where(StatusFilter::class)->is('active');
+            $and->where(CountFilter::class)->greaterThan(10);
+        });
+        $or->andWhere(function (FilterGroup $and) {
+            $and->where(StatusFilter::class)->is('inactive');
+        });
+    });
 ```
 
-**Problem:** No OR groups, no nested conditions.
+**New Classes:**
+- `FilterGroup` - Container for filter conditions with AND/OR operator
+- `FilterGroupBuilder` - Fluent builder for FilterGroup
 
-**Impact:** High - Many filter UIs require OR logic.
+**New Methods on FilterSelection:**
+- `makeOr()` - Create selection with OR root operator
+- `orWhere(callable)` - Add nested OR group
+- `andWhere(callable)` - Add nested AND group
+- `getGroup()` - Access root FilterGroup
+- `hasNestedGroups()` - Check for complex logic
 
-**Missing functionality:**
-```php
-// Desired:
-$selection->or(function($group) {
-    $group->where(StatusFilter::class)->is('active');
-    $group->where(StatusFilter::class)->is('pending');
-});
-
-// Or:
-$selection->whereAny([
-    StatusFilter::value()->is('active'),
-    StatusFilter::value()->is('pending'),
-]);
+**Serialization:** Complex selections use `group` key instead of `filters`:
+```json
+{
+    "group": {
+        "operator": "and",
+        "items": [
+            {"filter": "StatusFilter", "mode": "is", "value": "active"},
+            {
+                "operator": "or",
+                "items": [
+                    {"filter": "StatusFilter", "mode": "is", "value": "pending"}
+                ]
+            }
+        ]
+    }
+}
 ```
-
-**Note:** `GroupOperatorEnum` exists but is not implemented.
 
 ---
 
@@ -309,21 +357,55 @@ $selection->whereAny([
 
 ---
 
-### 3.3 Limited Relation Support
+### 3.3 Limited Relation Support ✅ RESOLVED
+
+**Original Problem:** Only simple `whereHas` was supported. Common patterns like `whereDoesntHave` were not available.
+
+**Solution Implemented:** `RelationModeEnum` with three modes and corresponding factory methods on `Filter`:
 
 ```php
-// Current: Only simple whereHas
-whereHas('pond', fn($q) => $q->where('water_type', 'fresh'))
+// RelationModeEnum defines three modes:
+enum RelationModeEnum: string {
+    case HAS = 'has';           // whereHas - records WITH matching relation
+    case DOESNT_HAVE = 'doesnt_have';  // whereDoesntHave - records WITHOUT matching relation
+    case HAS_NONE = 'has_none'; // whereDoesntHave without condition - records with NO relation
+}
 
-// Not supported:
-// - whereDoesntHave (Kois WITHOUT a pond)
-// - withCount + having (Kois with at least 3 tags)
-// - Nested relations (pond.location.country)
-// - morphTo relations
-// - Aggregate filters (SUM, AVG on relations)
+// via() - Find records that HAVE a matching relation (default)
+PondWaterTypeFilter::via('pond')
+// → Kois that have a pond with water_type = X
+
+// viaDoesntHave() - Find records that DON'T HAVE a matching relation
+PondWaterTypeFilter::viaDoesntHave('pond')
+// → Kois that don't have a pond with water_type = X
+// (includes kois without any pond OR kois with a pond that's not X)
+
+// withoutRelation() - Find records with NO relation at all
+PondWaterTypeFilter::withoutRelation('pond')
+// → Kois without any pond (pond_id IS NULL)
 ```
 
-**Impact:** Medium - Common use cases unsupported.
+**Usage Example:**
+```php
+// Find pending kois that DON'T have a fresh pond
+$result = QueryApplicator::for(Koi::query())
+    ->withFilters([
+        KoiStatusFilter::class,
+        PondWaterTypeFilter::viaDoesntHave('pond'),
+    ])
+    ->applyFilters([
+        FilterValue::for(KoiStatusFilter::class)->is('pending'),
+        FilterValue::for(PondWaterTypeFilter::class)->is('fresh'),
+    ])
+    ->getQuery()
+    ->get();
+```
+
+**Still Not Supported:**
+- withCount + having (records with at least N related items)
+- Nested relations (pond.location.country)
+- morphTo relations
+- Aggregate filters (SUM, AVG on relations)
 
 ---
 
@@ -692,32 +774,33 @@ Koi::getFilterByKey('KoiStatusFilter'); // Get specific filter
 
 ### Priority Matrix
 
-| Priority | Issue | Solution | Effort |
+| Priority | Issue | Solution | Status |
 |----------|-------|----------|--------|
-| **Critical** | No custom filter logic | Add `Filter::apply()` method | Medium |
-| **Critical** | No value validation | Add `Filter::validateValue()` | Medium |
-| **High** | Only AND logic | Implement `FilterGroup` with operators | High |
-| **High** | Match modes not extensible | Strategy pattern / handler registry | High |
-| **High** | Serialization loses context | Filter registry + metadata | Medium |
-| **Medium** | Relation not in definition | Add `FilterDefinition::$relation` | Low |
-| **Medium** | N+1 relation queries | Combine relation filters | Medium |
-| **Medium** | No options validation | Validate in SelectFilter | Low |
-| **Low** | Inconsistent naming | Refactoring | Low |
-| **Low** | Missing debugging tools | Add helper methods | Low |
+| ~~**Critical**~~ | ~~No custom filter logic~~ | ~~Add `Filter::apply()` method~~ | ✅ DONE |
+| ~~**Critical**~~ | ~~No value validation~~ | ~~Add `Filter::validateValue()`~~ | ✅ DONE |
+| ~~**High**~~ | ~~Only AND logic~~ | ~~Implement `FilterGroup` with operators~~ | ✅ DONE |
+| ~~**High**~~ | ~~Match modes not extensible~~ | ~~Strategy pattern / handler registry~~ | ✅ DONE |
+| **High** | Serialization loses context | Filter registry + metadata | Partial |
+| ~~**Medium**~~ | ~~Relation not in definition~~ | ~~Add `FilterDefinition::$relation`~~ | ✅ DONE |
+| ~~**Medium**~~ | ~~whereDoesntHave support~~ | ~~`RelationModeEnum` + factory methods~~ | ✅ DONE |
+| **Medium** | N+1 relation queries | Combine relation filters | Open |
+| ~~**Medium**~~ | ~~No options validation~~ | ~~Validate in SelectFilter~~ | ✅ DONE |
+| **Low** | Inconsistent naming | Refactoring | Open |
+| **Low** | Missing debugging tools | Add helper methods | Open |
 
 ### Suggested Roadmap
 
-#### Phase 1: Critical Fixes
-1. Add `Filter::apply()` for custom query logic
-2. Add value validation system
-3. Add filter registry for serialization
+#### Phase 1: Critical Fixes ✅ COMPLETE
+1. ~~Add `Filter::apply()` for custom query logic~~ ✅
+2. ~~Add value validation system~~ ✅
+3. Add filter registry for serialization (Partial - Model-based validation added)
 
-#### Phase 2: Flexibility
-1. Implement `FilterGroup` with AND/OR operators
-2. Add match mode handler registry
-3. Support `whereDoesntHave` for relations
+#### Phase 2: Flexibility ✅ COMPLETE
+1. ~~Implement `FilterGroup` with AND/OR operators~~ ✅
+2. ~~Add match mode handler registry~~ ✅
+3. ~~Support `whereDoesntHave` for relations~~ ✅
 
-#### Phase 3: Polish
+#### Phase 3: Polish (Open)
 1. Consistent naming refactoring
 2. Add debugging tools
 3. Performance optimizations
@@ -727,11 +810,21 @@ Koi::getFilterByKey('KoiStatusFilter'); // Get specific filter
 
 ## Conclusion
 
-The filter-core package provides a solid foundation for basic filtering needs. The fluent API and separation of concerns are well-designed. However, for production use in complex applications, the following limitations should be addressed:
+The filter-core package has evolved into a **production-ready** filtering solution. All critical and most high-priority issues have been resolved:
 
-1. **Custom filter logic** - Essential for real-world scenarios
-2. **Value validation** - Critical for data integrity
-3. **OR logic support** - Required for advanced filter UIs
-4. **Extensible match modes** - Needed for domain-specific operators
+### Completed Features ✅
 
-The package is suitable for simple CRUD applications but may require significant extension for complex filtering requirements.
+1. **Custom filter logic** - `Filter::apply()` method for custom query logic
+2. **Value validation** - `Filter::validationRules()` with Laravel Validator
+3. **OR logic support** - Full `FilterGroup` system with unlimited nesting
+4. **Extensible match modes** - Class-based `MatchModeContract` system
+5. **Type safety** - `typedValue()`, `BetweenValue` DTO, `sanitizeValue()`
+6. **Model-based validation** - `validateSelection()`, `getFilterByKey()`, `getFilterKeys()`
+
+### Remaining Open Items
+
+1. **Performance** - N+1 relation queries optimization
+2. **Developer Experience** - Debugging tools, consistent naming
+3. **Advanced Relations** - nested relations, morphTo, aggregate filters
+
+The package is now suitable for **complex production applications** with advanced filtering requirements including nested AND/OR logic, relation filters, and custom match modes.

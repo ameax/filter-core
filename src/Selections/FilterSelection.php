@@ -1,29 +1,38 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Ameax\FilterCore\Selections;
 
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Data\FilterValueBuilder;
+use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
 use JsonSerializable;
 
 /**
- * Represents a collection of filter values (AND logic).
+ * Represents a collection of filter conditions with support for AND/OR logic.
  *
- * @implements Arrayable<int, array<string, mixed>>
+ * FilterSelection uses a root FilterGroup internally to support complex
+ * nested conditions while maintaining backward compatibility with the
+ * simple array-based API.
+ *
+ * @implements Arrayable<string, mixed>
  */
 final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
 {
-    /** @var array<FilterValue> */
-    protected array $filters = [];
+    protected FilterGroup $rootGroup;
 
     protected ?string $name = null;
 
     protected ?string $description = null;
 
-    public function __construct() {}
+    public function __construct()
+    {
+        $this->rootGroup = FilterGroup::and();
+    }
 
     /**
      * Create a new FilterSelection.
@@ -41,7 +50,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public static function fromJson(string $json): self
     {
-        /** @var array{name?: string, description?: string, filters: array<array<string, mixed>>} $data */
+        /** @var array<string, mixed> $data */
         $data = json_decode($json, true);
 
         return self::fromArray($data);
@@ -50,7 +59,9 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Create a FilterSelection from array.
      *
-     * @param  array{name?: string, description?: string, filters: array<array<string, mixed>>}  $data
+     * Supports both legacy format (flat 'filters' array) and new format (with 'group').
+     *
+     * @param  array<string, mixed>  $data
      */
     public static function fromArray(array $data): self
     {
@@ -58,8 +69,20 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
         $selection->name = $data['name'] ?? null;
         $selection->description = $data['description'] ?? null;
 
-        foreach ($data['filters'] as $filterData) {
-            $selection->filters[] = FilterValue::fromArray($filterData);
+        // Support new group-based format
+        if (isset($data['group'])) {
+            $selection->rootGroup = FilterGroup::fromArray($data['group']);
+        }
+        // Legacy format: flat 'filters' array (implicitly AND)
+        elseif (isset($data['filters'])) {
+            foreach ($data['filters'] as $filterData) {
+                // Check if this is a nested group or a filter value
+                if (isset($filterData['operator'])) {
+                    $selection->rootGroup->addGroup(FilterGroup::fromArray($filterData));
+                } else {
+                    $selection->rootGroup->add(FilterValue::fromArray($filterData));
+                }
+            }
         }
 
         return $selection;
@@ -86,11 +109,21 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Add a filter value.
+     * Add a filter value to the root group.
      */
     public function add(FilterValue $filterValue): self
     {
-        $this->filters[] = $filterValue;
+        $this->rootGroup->add($filterValue);
+
+        return $this;
+    }
+
+    /**
+     * Add a nested FilterGroup.
+     */
+    public function addGroup(FilterGroup $group): self
+    {
+        $this->rootGroup->addGroup($group);
 
         return $this;
     }
@@ -109,6 +142,70 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
+     * Add an OR group with conditions.
+     *
+     * @example
+     * $selection
+     *     ->where(StatusFilter::class)->is('active')
+     *     ->orWhere(function($group) {
+     *         $group->where(StatusFilter::class)->is('pending');
+     *         $group->where(CountFilter::class)->greaterThan(10);
+     *     });
+     * // SQL: status = 'active' OR (status = 'pending' AND count > 10)
+     */
+    public function orWhere(callable $callback): self
+    {
+        $orGroup = FilterGroup::or();
+        $callback($orGroup);
+
+        if (! $orGroup->isEmpty()) {
+            $this->rootGroup->addGroup($orGroup);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Add an AND group with conditions.
+     *
+     * @example
+     * $selection
+     *     ->andWhere(function($group) {
+     *         $group->where(StatusFilter::class)->is('active');
+     *         $group->where(CountFilter::class)->greaterThan(5);
+     *     });
+     */
+    public function andWhere(callable $callback): self
+    {
+        $andGroup = FilterGroup::and();
+        $callback($andGroup);
+
+        if (! $andGroup->isEmpty()) {
+            $this->rootGroup->addGroup($andGroup);
+        }
+
+        return $this;
+    }
+
+    /**
+     * Create an OR selection (top-level OR instead of AND).
+     *
+     * @example
+     * $selection = FilterSelection::makeOr()
+     *     ->where(StatusFilter::class)->is('active')
+     *     ->where(StatusFilter::class)->is('pending');
+     * // SQL: status = 'active' OR status = 'pending'
+     */
+    public static function makeOr(?string $name = null): self
+    {
+        $selection = new self;
+        $selection->name = $name;
+        $selection->rootGroup = FilterGroup::or();
+
+        return $selection;
+    }
+
+    /**
      * Add a filter value (called by FilterValueBuilder).
      *
      * @internal
@@ -121,15 +218,29 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Remove all filters for a specific filter class.
      *
+     * Note: This only removes from the root group, not nested groups.
+     *
      * @param  class-string<Filter>  $filterClass
      */
     public function remove(string $filterClass): self
     {
         $key = $filterClass::key();
-        $this->filters = array_values(array_filter(
-            $this->filters,
-            fn (FilterValue $fv) => $fv->getFilterKey() !== $key
-        ));
+        $items = $this->rootGroup->getItems();
+
+        // Rebuild root group without matching filters
+        $newGroup = new FilterGroup($this->rootGroup->getOperator());
+        foreach ($items as $item) {
+            if ($item instanceof FilterValue && $item->getFilterKey() === $key) {
+                continue;
+            }
+            if ($item instanceof FilterValue) {
+                $newGroup->add($item);
+            } else {
+                $newGroup->addGroup($item);
+            }
+        }
+
+        $this->rootGroup = $newGroup;
 
         return $this;
     }
@@ -139,19 +250,43 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public function clear(): self
     {
-        $this->filters = [];
+        $this->rootGroup = new FilterGroup($this->rootGroup->getOperator());
 
         return $this;
     }
 
     /**
-     * Get all filter values.
+     * Get all filter values (flattened from all groups).
      *
      * @return array<FilterValue>
      */
     public function all(): array
     {
-        return $this->filters;
+        return $this->rootGroup->getAllFilterValues();
+    }
+
+    /**
+     * Get the root filter group.
+     */
+    public function getGroup(): FilterGroup
+    {
+        return $this->rootGroup;
+    }
+
+    /**
+     * Get the root operator.
+     */
+    public function getOperator(): GroupOperatorEnum
+    {
+        return $this->rootGroup->getOperator();
+    }
+
+    /**
+     * Check if selection has nested groups (complex logic).
+     */
+    public function hasNestedGroups(): bool
+    {
+        return $this->rootGroup->hasNestedGroups();
     }
 
     /**
@@ -175,7 +310,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public function hasFilters(): bool
     {
-        return $this->filters !== [];
+        return ! $this->rootGroup->isEmpty();
     }
 
     /**
@@ -187,7 +322,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     {
         $key = $filterClass::key();
 
-        foreach ($this->filters as $filter) {
+        foreach ($this->all() as $filter) {
             if ($filter->getFilterKey() === $key) {
                 return true;
             }
@@ -197,7 +332,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Get the filter value for a specific filter class.
+     * Get the first filter value for a specific filter class.
      *
      * @param  class-string<Filter>  $filterClass
      */
@@ -205,7 +340,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     {
         $key = $filterClass::key();
 
-        foreach ($this->filters as $filter) {
+        foreach ($this->all() as $filter) {
             if ($filter->getFilterKey() === $key) {
                 return $filter;
             }
@@ -215,24 +350,37 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * Get filter count.
+     * Get filter count (total filter values across all groups).
      */
     public function count(): int
     {
-        return count($this->filters);
+        return count($this->all());
     }
 
     /**
      * Convert to array.
      *
-     * @return array{name: string|null, description: string|null, filters: array<array<string, mixed>>}
+     * Uses new format with 'group' for complex selections,
+     * falls back to legacy 'filters' format for simple AND selections.
+     *
+     * @return array<string, mixed>
      */
     public function toArray(): array
     {
+        // For backward compatibility, use legacy format if possible
+        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND) {
+            return [
+                'name' => $this->name,
+                'description' => $this->description,
+                'filters' => array_map(fn (FilterValue $fv) => $fv->toArray(), $this->all()),
+            ];
+        }
+
+        // Use new group-based format for complex selections
         return [
             'name' => $this->name,
             'description' => $this->description,
-            'filters' => array_map(fn (FilterValue $fv) => $fv->toArray(), $this->filters),
+            'group' => $this->rootGroup->toArray(),
         ];
     }
 
@@ -245,7 +393,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
-     * @return array{name: string|null, description: string|null, filters: array<array<string, mixed>>}
+     * @return array<string, mixed>
      */
     public function jsonSerialize(): array
     {

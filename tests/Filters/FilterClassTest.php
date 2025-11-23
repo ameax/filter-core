@@ -4,6 +4,7 @@ namespace Ameax\FilterCore\Tests\Filters;
 
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
+use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\BetweenMatchMode;
 use Ameax\FilterCore\MatchModes\ContainsMatchMode;
@@ -300,5 +301,118 @@ class FilterClassTest extends TestCase
 
         // Should not include Shusui
         $this->assertFalse($result->pluck('name')->contains('Shusui'));
+    }
+
+    // ========================================
+    // viaDoesntHave Relation Filter Tests
+    // ========================================
+
+    public function test_filter_via_doesnt_have_relation(): void
+    {
+        // Find kois that DON'T have a pond with water_type = 'fresh'
+        // This should include: Sanke (salt pond), Asagi (brackish pond), Shusui (no pond)
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([
+                PondWaterTypeFilter::viaDoesntHave('pond'),
+            ])
+            ->applyFilter(FilterValue::for(PondWaterTypeFilter::class)->is('fresh'))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(3, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Sanke', 'Shusui'], $names);
+    }
+
+    public function test_filter_via_doesnt_have_with_any_mode(): void
+    {
+        // Find kois that DON'T have a pond with water_type in ['fresh', 'salt']
+        // This should include: Asagi (brackish), Shusui (no pond)
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([
+                PondWaterTypeFilter::viaDoesntHave('pond'),
+            ])
+            ->applyFilter(FilterValue::for(PondWaterTypeFilter::class)->any(['fresh', 'salt']))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(2, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Shusui'], $names);
+    }
+
+    public function test_filter_without_relation(): void
+    {
+        // Find kois that have NO pond at all
+        // This should only include: Shusui (pond_id = null)
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([
+                PondWaterTypeFilter::withoutRelation('pond'),
+            ])
+            ->applyFilter(FilterValue::for(PondWaterTypeFilter::class)->is('fresh')) // value is validated but ignored for HAS_NONE
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('Shusui', $result->first()->name);
+    }
+
+    public function test_relation_mode_enum_values(): void
+    {
+        $hasFilter = PondWaterTypeFilter::via('pond');
+        $this->assertEquals(RelationModeEnum::HAS, $hasFilter->getRelationMode());
+
+        $doesntHaveFilter = PondWaterTypeFilter::viaDoesntHave('pond');
+        $this->assertEquals(RelationModeEnum::DOESNT_HAVE, $doesntHaveFilter->getRelationMode());
+
+        $hasNoneFilter = PondWaterTypeFilter::withoutRelation('pond');
+        $this->assertEquals(RelationModeEnum::HAS_NONE, $hasNoneFilter->getRelationMode());
+    }
+
+    public function test_combined_direct_filter_with_doesnt_have_relation(): void
+    {
+        // Find pending kois that DON'T have a fresh pond
+        // Pending kois: Asagi (brackish), Shusui (no pond)
+        // Both don't have a fresh pond, so both should be returned
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([
+                KoiStatusFilter::class,
+                PondWaterTypeFilter::viaDoesntHave('pond'),
+            ])
+            ->applyFilters([
+                FilterValue::for(KoiStatusFilter::class)->is('pending'),
+                FilterValue::for(PondWaterTypeFilter::class)->is('fresh'),
+            ])
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(2, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Shusui'], $names);
+    }
+
+    public function test_via_and_via_doesnt_have_are_opposite(): void
+    {
+        // via('pond') with 'fresh' should return: Showa, Kohaku
+        $hasResult = QueryApplicator::for(Koi::query())
+            ->withFilters([PondWaterTypeFilter::via('pond')])
+            ->applyFilter(FilterValue::for(PondWaterTypeFilter::class)->is('fresh'))
+            ->getQuery()
+            ->get();
+
+        // viaDoesntHave('pond') with 'fresh' should return: Sanke, Asagi, Shusui
+        $doesntHaveResult = QueryApplicator::for(Koi::query())
+            ->withFilters([PondWaterTypeFilter::viaDoesntHave('pond')])
+            ->applyFilter(FilterValue::for(PondWaterTypeFilter::class)->is('fresh'))
+            ->getQuery()
+            ->get();
+
+        // Combined should be all 5 kois
+        $allNames = $hasResult->pluck('name')->merge($doesntHaveResult->pluck('name'))->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Kohaku', 'Sanke', 'Showa', 'Shusui'], $allNames);
+
+        // No overlap
+        $overlap = $hasResult->pluck('name')->intersect($doesntHaveResult->pluck('name'));
+        $this->assertCount(0, $overlap);
     }
 }

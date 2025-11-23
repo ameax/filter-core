@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\Filters;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Data\FilterDefinition;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
+use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicFilter;
 use Ameax\FilterCore\MatchModes\EmptyMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
@@ -20,6 +21,8 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 abstract class Filter
 {
     protected ?string $relation = null;
+
+    protected RelationModeEnum $relationMode = RelationModeEnum::HAS;
 
     /**
      * The database column this filter operates on.
@@ -145,15 +148,56 @@ abstract class Filter
     }
 
     /**
-     * Create a filter that applies via a relation.
+     * Create a filter that applies via a relation (whereHas).
      *
      * @return static
+     *
+     * @example PondWaterTypeFilter::via('pond') // Kois that have a pond with water_type = X
      */
     public static function via(string $relation): self
     {
         // @phpstan-ignore new.static
         $filter = new static;
         $filter->relation = $relation;
+        $filter->relationMode = RelationModeEnum::HAS;
+
+        return $filter;
+    }
+
+    /**
+     * Create a filter that applies via a negated relation (whereDoesntHave).
+     *
+     * This finds records that DON'T have a matching relation.
+     *
+     * @return static
+     *
+     * @example PondWaterTypeFilter::viaDoesntHave('pond') // Kois that don't have a pond with water_type = X
+     */
+    public static function viaDoesntHave(string $relation): self
+    {
+        // @phpstan-ignore new.static
+        $filter = new static;
+        $filter->relation = $relation;
+        $filter->relationMode = RelationModeEnum::DOESNT_HAVE;
+
+        return $filter;
+    }
+
+    /**
+     * Create a filter that finds records WITHOUT any relation.
+     *
+     * This is useful to find records where the relation doesn't exist at all.
+     *
+     * @return static
+     *
+     * @example SomeFilter::withoutRelation('pond') // Kois without any pond
+     */
+    public static function withoutRelation(string $relation): self
+    {
+        // @phpstan-ignore new.static
+        $filter = new static;
+        $filter->relation = $relation;
+        $filter->relationMode = RelationModeEnum::HAS_NONE;
 
         return $filter;
     }
@@ -164,6 +208,14 @@ abstract class Filter
     public function getRelation(): ?string
     {
         return $this->relation;
+    }
+
+    /**
+     * Get the relation mode (HAS, DOESNT_HAVE, HAS_NONE).
+     */
+    public function getRelationMode(): RelationModeEnum
+    {
+        return $this->relationMode;
     }
 
     /**

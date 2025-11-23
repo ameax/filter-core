@@ -4,6 +4,7 @@ namespace Ameax\FilterCore\Tests;
 
 use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\IntegerFilter;
 use Ameax\FilterCore\Filters\SelectFilter;
@@ -12,6 +13,7 @@ use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\MatchModes\MatchMode;
 use Ameax\FilterCore\Query\QueryApplicator;
+use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Ameax\FilterCore\Tests\Filters\KoiActiveFilter;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
@@ -40,6 +42,8 @@ use Ameax\FilterCore\Tests\Models\Pond;
  * 8. Complete Workflow - Real-world usage patterns
  * 9. Sanitization & Validation - Automatic value processing
  * 10. Type-Safe Values - Strict typing with typedValue()
+ * 11. Custom Match Modes - Extensibility via MatchModeContract
+ * 12. OR Logic & FilterGroups - Complex nested AND/OR conditions
  *
  * DATA MODEL:
  * - Pond: has water_type (fresh/salt/brackish), capacity, is_heated
@@ -1218,5 +1222,310 @@ class TutorialTest extends TestCase
             $mode = MatchMode::get($key);
             $this->assertEquals($key, $mode->key());
         }
+    }
+
+    // ========================================================================
+    // SECTION 12: OR LOGIC & FILTER GROUPS
+    // ========================================================================
+    // Complex nested AND/OR conditions with FilterGroup.
+    // ========================================================================
+
+    /**
+     * FilterGroup: A container for filter conditions with AND/OR logic.
+     *
+     * By default, FilterSelection uses AND logic:
+     * status = 'active' AND count > 5
+     *
+     * But sometimes you need OR logic:
+     * status = 'active' OR status = 'pending'
+     *
+     * FilterGroup solves this with nested groups that can use AND or OR.
+     */
+    public function test_12_1_filter_group_basics(): void
+    {
+        // AND group (default)
+        $andGroup = FilterGroup::and();
+        $this->assertEquals(GroupOperatorEnum::AND, $andGroup->getOperator());
+
+        // OR group
+        $orGroup = FilterGroup::or();
+        $this->assertEquals(GroupOperatorEnum::OR, $orGroup->getOperator());
+
+        // Add filters to a group
+        $andGroup->where(KoiStatusFilter::class)->is('active');
+        $andGroup->where(KoiCountFilter::class)->greaterThan(5);
+
+        $this->assertEquals(2, $andGroup->count());
+        $this->assertFalse($andGroup->isEmpty());
+    }
+
+    /**
+     * Simple OR logic: status = 'active' OR status = 'pending'.
+     *
+     * Use FilterSelection::makeOr() to create a selection with OR logic
+     * instead of the default AND logic.
+     */
+    public function test_12_2_simple_or_logic(): void
+    {
+        // Create an OR selection (top-level OR)
+        $selection = FilterSelection::makeOr()
+            ->where(KoiStatusFilter::class)->is('active')
+            ->where(KoiStatusFilter::class)->is('pending');
+
+        // This generates: status = 'active' OR status = 'pending'
+        $result = Koi::query()->applySelection($selection)->get();
+
+        // Active: Showa, Kohaku
+        // Pending: Asagi, Shusui
+        $this->assertCount(4, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Kohaku', 'Showa', 'Shusui'], $names);
+    }
+
+    /**
+     * Nested OR group within AND selection.
+     *
+     * Use orWhere() to add an OR group to an AND selection:
+     * count > 5 AND (status = 'active' OR status = 'pending')
+     */
+    public function test_12_3_and_with_nested_or(): void
+    {
+        $selection = FilterSelection::make()
+            ->where(KoiCountFilter::class)->greaterThan(5)
+            ->orWhere(function (FilterGroup $group) {
+                $group->where(KoiStatusFilter::class)->is('active');
+                $group->where(KoiStatusFilter::class)->is('pending');
+            });
+
+        // This generates: count > 5 AND (status = 'active' OR status = 'pending')
+        $result = Koi::query()->applySelection($selection)->get();
+
+        // count > 5: Showa (10), Kohaku (20), Asagi (15)
+        // AND (active OR pending): all three match
+        $this->assertCount(3, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Kohaku', 'Showa'], $names);
+    }
+
+    /**
+     * Complex nested groups: (A AND B) OR (C AND D).
+     *
+     * Use andWhere() within makeOr() to create complex conditions:
+     * (status = 'active' AND count > 15) OR (status = 'pending')
+     */
+    public function test_12_4_complex_nested_groups(): void
+    {
+        // (status = 'active' AND count > 15) OR (status = 'pending')
+        $selection = FilterSelection::makeOr()
+            ->andWhere(function (FilterGroup $group) {
+                $group->where(KoiStatusFilter::class)->is('active');
+                $group->where(KoiCountFilter::class)->greaterThan(15);
+            })
+            ->andWhere(function (FilterGroup $group) {
+                $group->where(KoiStatusFilter::class)->is('pending');
+            });
+
+        $result = Koi::query()->applySelection($selection)->get();
+
+        // (active AND count > 15): Kohaku (20)
+        // OR pending: Asagi, Shusui
+        $this->assertCount(3, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Kohaku', 'Shusui'], $names);
+    }
+
+    /**
+     * Deeply nested groups: A AND ((B AND C) OR (D AND E)).
+     *
+     * Groups can be nested multiple levels deep for complex logic.
+     */
+    public function test_12_5_deeply_nested_groups(): void
+    {
+        // count >= 5 AND ((status = 'active' AND count > 10) OR (status = 'inactive'))
+        $selection = FilterSelection::make()
+            ->where(KoiCountFilter::class)->greaterThan(4) // >= 5
+            ->orWhere(function (FilterGroup $or) {
+                $or->andWhere(function (FilterGroup $and) {
+                    $and->where(KoiStatusFilter::class)->is('active');
+                    $and->where(KoiCountFilter::class)->greaterThan(10);
+                });
+                $or->andWhere(function (FilterGroup $and) {
+                    $and->where(KoiStatusFilter::class)->is('inactive');
+                });
+            });
+
+        $result = Koi::query()->applySelection($selection)->get();
+
+        // count >= 5: Showa (10), Kohaku (20), Sanke (5), Asagi (15)
+        // AND ((active AND count > 10) OR inactive):
+        //   - active AND count > 10: Kohaku (20)
+        //   - inactive: Sanke
+        $this->assertCount(2, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Kohaku', 'Sanke'], $names);
+    }
+
+    /**
+     * OR logic with relation filters.
+     *
+     * Works seamlessly with relation filters via whereHas.
+     */
+    public function test_12_6_or_with_relation_filters(): void
+    {
+        // water_type = 'fresh' OR water_type = 'brackish'
+        $selection = FilterSelection::makeOr()
+            ->where(PondWaterTypeFilter::class)->is('fresh')
+            ->where(PondWaterTypeFilter::class)->is('brackish');
+
+        $result = Koi::query()->applySelection($selection)->get();
+
+        // Fresh pond: Showa, Kohaku
+        // Brackish pond: Asagi
+        $this->assertCount(3, $result);
+        $names = $result->pluck('name')->sort()->values()->all();
+        $this->assertEquals(['Asagi', 'Kohaku', 'Showa'], $names);
+    }
+
+    /**
+     * Mixed direct and relation filters with OR.
+     */
+    public function test_12_7_mixed_filters_with_or(): void
+    {
+        // status = 'pending' OR water_type = 'fresh'
+        $selection = FilterSelection::makeOr()
+            ->where(KoiStatusFilter::class)->is('pending')
+            ->where(PondWaterTypeFilter::class)->is('fresh');
+
+        $result = Koi::query()->applySelection($selection)->get();
+
+        // pending: Asagi, Shusui
+        // fresh pond: Showa, Kohaku
+        $this->assertCount(4, $result);
+    }
+
+    /**
+     * Serialization with nested groups.
+     *
+     * Complex selections are serialized with a 'group' key instead of 'filters'.
+     * Simple AND-only selections use the legacy 'filters' format for compatibility.
+     */
+    public function test_12_8_serialization_with_groups(): void
+    {
+        // Simple AND selection uses legacy format
+        $simpleSelection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->is('active')
+            ->where(KoiCountFilter::class)->greaterThan(5);
+
+        $simpleArray = $simpleSelection->toArray();
+        $this->assertArrayHasKey('filters', $simpleArray);
+        $this->assertArrayNotHasKey('group', $simpleArray);
+
+        // Complex selection with OR uses new group format
+        $complexSelection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->is('active')
+            ->orWhere(function (FilterGroup $g) {
+                $g->where(KoiStatusFilter::class)->is('pending');
+            });
+
+        $complexArray = $complexSelection->toArray();
+        $this->assertArrayHasKey('group', $complexArray);
+        $this->assertArrayNotHasKey('filters', $complexArray);
+        $this->assertEquals('and', $complexArray['group']['operator']);
+    }
+
+    /**
+     * JSON round-trip with nested groups.
+     *
+     * Complex selections can be saved and restored from JSON.
+     */
+    public function test_12_9_json_round_trip_with_groups(): void
+    {
+        // Create complex selection
+        $original = FilterSelection::make('Complex Query')
+            ->where(KoiCountFilter::class)->greaterThan(5)
+            ->orWhere(function (FilterGroup $g) {
+                $g->where(KoiStatusFilter::class)->is('active');
+                $g->where(KoiStatusFilter::class)->is('pending');
+            });
+
+        // Serialize to JSON
+        $json = $original->toJson();
+
+        // Restore from JSON
+        $restored = FilterSelection::fromJson($json);
+
+        // Compare results
+        $originalResult = Koi::query()->applySelection($original)->get();
+        $restoredResult = Koi::query()->applySelection($restored)->get();
+
+        $this->assertEquals(
+            $originalResult->pluck('id')->sort()->values()->all(),
+            $restoredResult->pluck('id')->sort()->values()->all()
+        );
+    }
+
+    /**
+     * Real-world workflow: User can select "any of these statuses".
+     *
+     * Common UI pattern where user can select multiple status values
+     * with OR logic between them.
+     */
+    public function test_12_10_workflow_multi_status_selection(): void
+    {
+        // Simulate user selecting multiple statuses in a UI
+        $selectedStatuses = ['active', 'pending'];
+        $minCount = 10;
+
+        // Build query: count >= minCount AND status IN (active, pending)
+        // Note: This can be done with ANY mode for simple cases
+        $simpleWay = Koi::query()
+            ->applyFilters([
+                FilterValue::for(KoiStatusFilter::class)->any($selectedStatuses),
+                FilterValue::for(KoiCountFilter::class)->greaterThan($minCount - 1),
+            ])
+            ->get();
+
+        // Or with explicit OR groups (more flexible for complex cases)
+        $selection = FilterSelection::make()
+            ->where(KoiCountFilter::class)->greaterThan($minCount - 1)
+            ->orWhere(function (FilterGroup $g) use ($selectedStatuses) {
+                foreach ($selectedStatuses as $status) {
+                    $g->where(KoiStatusFilter::class)->is($status);
+                }
+            });
+
+        $orWay = Koi::query()->applySelection($selection)->get();
+
+        // Both should return: Showa (10, active), Kohaku (20, active), Asagi (15, pending)
+        $this->assertCount(3, $simpleWay);
+        $this->assertCount(3, $orWay);
+    }
+
+    /**
+     * FilterGroup inspection methods.
+     */
+    public function test_12_11_filter_group_inspection(): void
+    {
+        $selection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->is('active')
+            ->orWhere(function (FilterGroup $g) {
+                $g->where(KoiStatusFilter::class)->is('pending');
+                $g->where(KoiCountFilter::class)->greaterThan(10);
+            });
+
+        // Check if selection has nested groups
+        $this->assertTrue($selection->hasNestedGroups());
+
+        // Get the root group
+        $rootGroup = $selection->getGroup();
+        $this->assertEquals(GroupOperatorEnum::AND, $rootGroup->getOperator());
+
+        // Get all filter values (flattened)
+        $allFilters = $selection->all();
+        $this->assertCount(3, $allFilters);
+
+        // Get all unique filter keys
+        $keys = $rootGroup->getAllFilterKeys();
+        $this->assertCount(2, $keys); // KoiStatusFilter, KoiCountFilter
     }
 }

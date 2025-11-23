@@ -77,10 +77,13 @@ src/
 ├── Enums/
 │   ├── FilterTypeEnum.php       ✓ Implementiert (SELECT, INTEGER, TEXT, BOOLEAN)
 │   ├── MatchModeEnum.php        ✓ Implementiert (IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY, NOT_EMPTY)
-│   └── GroupOperatorEnum.php    ✓ Implementiert (AND, OR)
+│   ├── GroupOperatorEnum.php    ✓ Implementiert (AND, OR)
+│   └── RelationModeEnum.php     ✓ Implementiert (HAS, DOESNT_HAVE, HAS_NONE)
 │
 ├── Selections/
-│   └── FilterSelection.php      ✓ Implementiert (Gruppierung, JSON-Serialisierung)
+│   ├── FilterSelection.php      ✓ Implementiert (Gruppierung, JSON-Serialisierung, OR-Logik)
+│   ├── FilterGroup.php          ✓ Implementiert (AND/OR Gruppen, Verschachtelung)
+│   └── FilterGroupBuilder.php   ✓ Implementiert (Fluent API für Gruppen)
 │
 ├── Query/
 │   └── QueryApplicator.php      ✓ Implementiert (Eloquent Builder, Sanitization, Validation)
@@ -92,7 +95,7 @@ src/
 │   └── FilterValidationException.php  ✓ Implementiert
 │
 └── Filters/
-    ├── Filter.php               ✓ Implementiert (Basisklasse mit apply, sanitizeValue, validationRules, typedValue)
+    ├── Filter.php               ✓ Implementiert (Basisklasse mit apply, sanitizeValue, validationRules, typedValue, via, viaDoesntHave, withoutRelation)
     ├── SelectFilter.php         ✓ Implementiert
     ├── IntegerFilter.php        ✓ Implementiert
     ├── TextFilter.php           ✓ Implementiert
@@ -106,14 +109,19 @@ src/
         └── DynamicBooleanFilter.php  ✓ Implementiert
 
 tests/
-├── TutorialTest.php             ✓ 40 Tests als vollständiges Tutorial
+├── TutorialTest.php             ✓ 51 Tests als vollständiges Tutorial (inkl. Section 12: OR-Logik)
 ├── Query/
 │   └── QueryApplicatorTest.php  ✓ 21 Tests für alle Match-Modi
 ├── Filters/
 │   ├── FilterClassTest.php      ✓ Tests für Filter-Klassen
 │   └── DynamicFilterTest.php    ✓ Tests für dynamische Filter
-└── Selections/
-    └── FilterSelectionTest.php  ✓ Tests für Selections
+├── Selections/
+│   ├── FilterSelectionTest.php  ✓ Tests für Selections
+│   └── FilterGroupTest.php      ✓ 25 Tests für OR-Logik und verschachtelte Gruppen
+└── Concerns/
+    └── FilterableTest.php       ✓ Tests für Filterable Trait
+
+Gesamt: 201 Tests
 ```
 
 ## Kern-Konzepte
@@ -305,7 +313,7 @@ Das neue System soll das bestehende `Support\Filters` System nicht ersetzen, son
 
 ## Implementierungsstatus
 
-### Phase 1 (Abgeschlossen)
+### Phase 1 (Abgeschlossen) ✅
 - [x] Core-Package Implementierung
 - [x] Filter-Typen (Select, Integer, Text, Boolean)
 - [x] Match-Modi (IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY)
@@ -319,10 +327,26 @@ Das neue System soll das bestehende `Support\Filters` System nicht ersetzen, son
 - [x] Custom Filter Logic (apply)
 - [x] BetweenValue DTO
 
-### Phase 2 (Geplant)
+### Phase 2 (Abgeschlossen) ✅
 - [ ] Livewire/Flux UI-Package
-- [ ] Filter-Gruppen mit OR-Logik
-- [ ] Erweiterbares Match-Mode System
+- [x] **Filter-Gruppen mit OR-Logik** ✅
+  - FilterGroup Klasse mit AND/OR Operatoren
+  - Unbegrenzte Verschachtelung von Gruppen
+  - FilterSelection::makeOr(), orWhere(), andWhere()
+  - JSON-Serialisierung mit Abwärtskompatibilität
+- [x] **Erweiterbares Match-Mode System** ✅
+  - Class-based MatchModes (MatchModeContract)
+  - Custom MatchModes registrierbar
+  - MatchMode::register() und MatchMode::get()
+- [x] **Model-basierte Validierung** ✅
+  - getFilterByKey(), getFilterKeys()
+  - validateSelection() für Vorab-Validierung
+  - scopeApplySelection() mit strict: false Option
+- [x] **Relation Filter Modi** ✅
+  - RelationModeEnum (HAS, DOESNT_HAVE, HAS_NONE)
+  - Filter::via() für whereHas
+  - Filter::viaDoesntHave() für whereDoesntHave
+  - Filter::withoutRelation() für Datensätze ohne Relation
 
 ### Phase 3 (Geplant)
 - [ ] Filament-Integration
@@ -330,3 +354,5 @@ Das neue System soll das bestehende `Support\Filters` System nicht ersetzen, son
 
 ### Phase 4 (Geplant)
 - [ ] Migration bestehender Filter
+- [ ] Performance-Optimierungen (N+1 bei Relations)
+- [ ] Debugging-Tools (toSql, explain)
