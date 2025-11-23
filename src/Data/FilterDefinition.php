@@ -16,7 +16,7 @@ final class FilterDefinition implements Arrayable, JsonSerializable
 {
     /**
      * @param  array<MatchModeEnum>  $allowedMatchModes
-     * @param  array<string, mixed>  $options  For SELECT type: ['value' => 'Label', ...]
+     * @param  array<int|string, mixed>  $options  For SELECT type: ['value' => 'Label', ...]
      * @param  array<string, mixed>  $meta  Additional metadata
      */
     public function __construct(
@@ -82,7 +82,7 @@ final class FilterDefinition implements Arrayable, JsonSerializable
     }
 
     /**
-     * @return array<string, mixed>
+     * @return array<int|string, mixed>
      */
     public function getOptions(): array
     {

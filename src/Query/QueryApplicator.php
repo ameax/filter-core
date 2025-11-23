@@ -5,6 +5,7 @@ namespace Ameax\FilterCore\Query;
 use Ameax\FilterCore\Data\FilterDefinition;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use InvalidArgumentException;
@@ -14,6 +15,9 @@ use InvalidArgumentException;
  */
 final class QueryApplicator
 {
+    /** @var array<string, Filter> */
+    protected array $filters = [];
+
     /** @var array<string, FilterDefinition> */
     protected array $filterDefinitions = [];
 
@@ -38,7 +42,25 @@ final class QueryApplicator
     }
 
     /**
-     * Register filter definitions.
+     * Register filters (Filter classes or instances).
+     *
+     * @param  array<class-string<Filter>|Filter>  $filters
+     */
+    public function withFilters(array $filters): self
+    {
+        foreach ($filters as $filter) {
+            $filterInstance = is_string($filter) ? $filter::make() : $filter;
+            $key = $filterInstance::key();
+
+            $this->filters[$key] = $filterInstance;
+            $this->filterDefinitions[$key] = $filterInstance->toDefinition();
+        }
+
+        return $this;
+    }
+
+    /**
+     * Register filter definitions (legacy support).
      *
      * @param  array<FilterDefinition>  $definitions
      */
@@ -74,7 +96,19 @@ final class QueryApplicator
         $column = $definition->getColumn();
         $value = $filterValue->getValue();
 
-        $this->applyMatchMode($column, $matchMode, $value);
+        // Check if this filter has a relation
+        $filter = $this->filters[$filterKey] ?? null;
+        $relation = $filter?->getRelation();
+
+        if ($relation !== null && $this->query instanceof Builder) {
+            // Apply via whereHas
+            $this->query->whereHas($relation, function (Builder $query) use ($column, $matchMode, $value): void {
+                $this->applyMatchModeToQuery($query, $column, $matchMode, $value);
+            });
+        } else {
+            // Apply directly
+            $this->applyMatchModeToQuery($this->query, $column, $matchMode, $value);
+        }
 
         $this->appliedFilters[] = $filterValue;
 
@@ -124,75 +158,86 @@ final class QueryApplicator
     }
 
     /**
-     * Apply the match mode logic to the query.
+     * Apply the match mode logic to a query.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
      */
-    protected function applyMatchMode(string $column, MatchModeEnum $matchMode, mixed $value): void
-    {
+    protected function applyMatchModeToQuery(
+        Builder|QueryBuilder $query,
+        string $column,
+        MatchModeEnum $matchMode,
+        mixed $value
+    ): void {
         match ($matchMode) {
-            MatchModeEnum::IS => $this->applyIs($column, $value),
-            MatchModeEnum::IS_NOT => $this->applyIsNot($column, $value),
-            MatchModeEnum::ANY => $this->applyAny($column, $value),
-            MatchModeEnum::NONE => $this->applyNone($column, $value),
-            MatchModeEnum::GREATER_THAN => $this->query->where($column, '>', $value),
-            MatchModeEnum::LESS_THAN => $this->query->where($column, '<', $value),
-            MatchModeEnum::BETWEEN => $this->applyBetween($column, $value),
-            MatchModeEnum::CONTAINS => $this->query->where($column, 'like', '%'.$value.'%'),
-            MatchModeEnum::EMPTY => $this->query->whereNull($column),
-            MatchModeEnum::NOT_EMPTY => $this->query->whereNotNull($column),
+            MatchModeEnum::IS => $this->applyIs($query, $column, $value),
+            MatchModeEnum::IS_NOT => $this->applyIsNot($query, $column, $value),
+            MatchModeEnum::ANY => $this->applyAny($query, $column, $value),
+            MatchModeEnum::NONE => $this->applyNone($query, $column, $value),
+            MatchModeEnum::GREATER_THAN => $query->where($column, '>', $value),
+            MatchModeEnum::LESS_THAN => $query->where($column, '<', $value),
+            MatchModeEnum::BETWEEN => $this->applyBetween($query, $column, $value),
+            MatchModeEnum::CONTAINS => $query->where($column, 'like', '%'.$value.'%'),
+            MatchModeEnum::EMPTY => $query->whereNull($column),
+            MatchModeEnum::NOT_EMPTY => $query->whereNotNull($column),
         };
     }
 
     /**
      * Apply IS match mode.
-     * Single value: WHERE column = value
-     * Array value: WHERE column IN (values)
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
      */
-    protected function applyIs(string $column, mixed $value): void
+    protected function applyIs(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
         if (is_array($value)) {
-            $this->query->whereIn($column, $value);
+            $query->whereIn($column, $value);
         } else {
-            $this->query->where($column, '=', $value);
+            $query->where($column, '=', $value);
         }
     }
 
     /**
      * Apply IS_NOT match mode.
-     * Single value: WHERE column != value
-     * Array value: WHERE column NOT IN (values)
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
      */
-    protected function applyIsNot(string $column, mixed $value): void
+    protected function applyIsNot(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
         if (is_array($value)) {
-            $this->query->whereNotIn($column, $value);
+            $query->whereNotIn($column, $value);
         } else {
-            $this->query->where($column, '!=', $value);
+            $query->where($column, '!=', $value);
         }
     }
 
     /**
-     * Apply ANY match mode (value is in array).
+     * Apply ANY match mode.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
      */
-    protected function applyAny(string $column, mixed $value): void
+    protected function applyAny(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
         $values = is_array($value) ? $value : [$value];
-        $this->query->whereIn($column, $values);
+        $query->whereIn($column, $values);
     }
 
     /**
-     * Apply NONE match mode (value is not in array).
+     * Apply NONE match mode.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
      */
-    protected function applyNone(string $column, mixed $value): void
+    protected function applyNone(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
         $values = is_array($value) ? $value : [$value];
-        $this->query->whereNotIn($column, $values);
+        $query->whereNotIn($column, $values);
     }
 
     /**
      * Apply BETWEEN match mode.
-     * Expects an array with [min, max] or ['min' => value, 'max' => value].
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
      */
-    protected function applyBetween(string $column, mixed $value): void
+    protected function applyBetween(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
         if (! is_array($value)) {
             throw new InvalidArgumentException('BETWEEN match mode requires an array value');
@@ -205,6 +250,6 @@ final class QueryApplicator
             throw new InvalidArgumentException('BETWEEN match mode requires both min and max values');
         }
 
-        $this->query->whereBetween($column, [$min, $max]);
+        $query->whereBetween($column, [$min, $max]);
     }
 }

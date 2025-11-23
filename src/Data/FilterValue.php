@@ -3,6 +3,7 @@
 namespace Ameax\FilterCore\Data;
 
 use Ameax\FilterCore\Enums\MatchModeEnum;
+use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 
@@ -20,6 +21,19 @@ final class FilterValue implements Arrayable, JsonSerializable
         protected MatchModeEnum $matchMode,
         protected mixed $value,
     ) {}
+
+    /**
+     * Create a fluent builder for a filter class.
+     *
+     * @param  class-string<Filter>  $filterClass
+     *
+     * @example FilterValue::for(StatusFilter::class)->value('active')
+     * @example FilterValue::for(StatusFilter::class)->is('active')
+     */
+    public static function for(string $filterClass): FilterValueBuilder
+    {
+        return new FilterValueBuilder($filterClass);
+    }
 
     public static function make(string $filterKey, MatchModeEnum $matchMode, mixed $value): self
     {

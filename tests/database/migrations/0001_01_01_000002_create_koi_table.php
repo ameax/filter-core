@@ -11,6 +11,9 @@ return new class extends Migration
         Schema::create('kois', function (Blueprint $table) {
             $table->id();
 
+            // Relation to Pond
+            $table->foreignId('pond_id')->nullable()->constrained()->nullOnDelete();
+
             // SELECT: single value from options
             $table->string('status')->default('active');
 
