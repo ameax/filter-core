@@ -1,5 +1,9 @@
 # UI-Adapter Konzept
 
+> **Hinweis:** Dieses Dokument beschreibt das Konzept für zukünftige UI-Packages.
+> Diese werden als separate Packages entwickelt (filter-blade, filter-livewire, filter-filament)
+> und sind nicht Teil von filter-core.
+
 ## Übersicht
 
 Das UI-Adapter-System ermöglicht die Verwendung des Filter-Cores in verschiedenen Frontend-Frameworks. Jeder Adapter übersetzt die Filter-Definitionen in die jeweilige UI-Sprache.

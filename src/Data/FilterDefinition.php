@@ -6,16 +6,22 @@ namespace Ameax\FilterCore\Data;
 
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
+use Ameax\FilterCore\MatchModes\AllMatchMode;
 use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\BetweenMatchMode;
 use Ameax\FilterCore\MatchModes\ContainsMatchMode;
 use Ameax\FilterCore\MatchModes\EmptyMatchMode;
+use Ameax\FilterCore\MatchModes\EndsWithMatchMode;
 use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
+use Ameax\FilterCore\MatchModes\GreaterThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\MatchModes\IsNotMatchMode;
 use Ameax\FilterCore\MatchModes\LessThanMatchMode;
+use Ameax\FilterCore\MatchModes\LessThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\MatchModes\NotEmptyMatchMode;
+use Ameax\FilterCore\MatchModes\RegexMatchMode;
+use Ameax\FilterCore\MatchModes\StartsWithMatchMode;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 
@@ -148,17 +154,23 @@ final class FilterDefinition implements Arrayable, JsonSerializable
                 new IsMatchMode,
                 new IsNotMatchMode,
                 new AnyMatchMode,
+                new AllMatchMode,
                 new NoneMatchMode,
             ],
             FilterTypeEnum::INTEGER => [
                 new IsMatchMode,
                 new IsNotMatchMode,
                 new GreaterThanMatchMode,
+                new GreaterThanOrEqualMatchMode,
                 new LessThanMatchMode,
+                new LessThanOrEqualMatchMode,
                 new BetweenMatchMode,
             ],
             FilterTypeEnum::TEXT => [
                 new ContainsMatchMode,
+                new StartsWithMatchMode,
+                new EndsWithMatchMode,
+                new RegexMatchMode,
                 new IsMatchMode,
                 new IsNotMatchMode,
             ],

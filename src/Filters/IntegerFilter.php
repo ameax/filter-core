@@ -10,9 +10,11 @@ use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicIntegerFilter;
 use Ameax\FilterCore\MatchModes\BetweenMatchMode;
 use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
+use Ameax\FilterCore\MatchModes\GreaterThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\MatchModes\IsNotMatchMode;
 use Ameax\FilterCore\MatchModes\LessThanMatchMode;
+use Ameax\FilterCore\MatchModes\LessThanOrEqualMatchMode;
 
 /**
  * Base class for INTEGER type filters.
@@ -43,7 +45,9 @@ abstract class IntegerFilter extends Filter
             new IsMatchMode,
             new IsNotMatchMode,
             new GreaterThanMatchMode,
+            new GreaterThanOrEqualMatchMode,
             new LessThanMatchMode,
+            new LessThanOrEqualMatchMode,
             new BetweenMatchMode,
         ];
     }

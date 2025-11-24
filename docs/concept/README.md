@@ -2,34 +2,15 @@
 
 ## Übersicht
 
-Dieses Dokument beschreibt das Konzept für ein modulares, wiederverwendbares Filter-System für Laravel-Anwendungen. Das System trennt die Filter-Logik von der UI-Darstellung und ermöglicht die Verwendung in verschiedenen Kontexten (Blade, Livewire, Filament).
+Modulares, wiederverwendbares Filter-System für Laravel. Trennt Filter-Logik von UI-Darstellung und ermöglicht Verwendung in verschiedenen Kontexten (Blade, Livewire, Filament).
 
-## Motivation
-
-### Aktuelle Situation
-
-Das bestehende Filter-System in `Support\Filters` bietet bereits:
-- Filter-Definitionen mit `FilterAbstract`
-- Conditions (`IS`, `IS_NOT`, `BETWEEN`, etc.)
-- Input-Typen (`SELECT_SINGLE`, `SELECT_MULTIPLE`, `DATE_RANGE`, etc.)
-- `FiltersService` für Query-Anwendung
-
-### Limitationen des aktuellen Systems
-
-1. **Enge UI-Kopplung**: Views sind direkt in `FilterInputTypeEnum` definiert
-2. **Fehlende Match-Modi**: Kein `ANY`/`ALL`/`NONE` für Multi-Select
-3. **Keine Filter-Gruppen**: Keine AND/OR Kombinationen
-4. **Keine Persistierung**: Keine speicherbaren Selektionen
-5. **Model-spezifisch**: Filter sind stark an spezifische Models gebunden
-
-## Architektur-Übersicht
+## Architektur
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        UI Layer                                  │
+│                     UI Layer (separate Packages)                 │
 ├─────────────────┬─────────────────┬─────────────────────────────┤
 │  filter-blade   │ filter-livewire │     filter-filament         │
-│                 │    (Flux)       │                             │
 └────────┬────────┴────────┬────────┴──────────────┬──────────────┘
          │                 │                        │
          ▼                 ▼                        ▼
@@ -39,320 +20,245 @@ Das bestehende Filter-System in `Support\Filters` bietet bereits:
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐   │
 │  │ Filter Types │  │ Match Modes  │  │ Selection Groups     │   │
 │  │              │  │              │  │                      │   │
-│  │ Phase 1:     │  │ Phase 1:     │  │ - AND/OR Logic       │   │
-│  │ - Select     │  │ - IS, IS_NOT │  │ - Nested Groups      │   │
-│  │ - Integer    │  │ - ANY, NONE  │  │ - Persistence        │   │
-│  │ - Text       │  │ - GT, LT     │  │                      │   │
-│  │ - Boolean    │  │ - BETWEEN    │  │                      │   │
-│  │              │  │ - CONTAINS   │  │                      │   │
-│  │ Phase 2:     │  │ - EMPTY      │  │                      │   │
-│  │ - MultiSelect│  │              │  │                      │   │
-│  │ - Decimal    │  │ Phase 2:     │  │                      │   │
-│  │ - Date       │  │ - ALL        │  │                      │   │
-│  │ - DateTime   │  │ - GTE, LTE   │  │                      │   │
-│  │              │  │ - STARTS/END │  │                      │   │
+│  │ - Select     │  │ - is, isNot  │  │ - AND/OR Logic       │   │
+│  │ - Integer    │  │ - any, all   │  │ - Nested Groups      │   │
+│  │ - Text       │  │ - none       │  │ - JSON Persistence   │   │
+│  │ - Boolean    │  │ - gt,gte,lt  │  │                      │   │
+│  │              │  │   lte,between│  │                      │   │
+│  │              │  │ - contains   │  │                      │   │
+│  │              │  │ - startsWith │  │                      │   │
+│  │              │  │ - endsWith   │  │                      │   │
+│  │              │  │ - regex      │  │                      │   │
+│  │              │  │ - empty      │  │                      │   │
+│  │              │  │ - notEmpty   │  │                      │   │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │  ┌──────────────────────────────────────────────────────────┐   │
 │  │                    Query Applicator                       │   │
 │  │                                                           │   │
-│  │  - Eloquent Builder Integration                           │   │
-│  │  - Collection Filtering                                   │   │
+│  │  - Eloquent Builder Integration  ✅                       │   │
+│  │  - Collection Filtering (geplant)                         │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ## Package-Struktur
 
-### filter-core (Hauptpaket)
-
 ```
 src/
-├── Data/
-│   ├── FilterDefinition.php     ✓ Implementiert
-│   ├── FilterValue.php          ✓ Implementiert
-│   ├── FilterValueBuilder.php   ✓ Implementiert (Fluent API)
-│   └── BetweenValue.php         ✓ Implementiert (Type-safe DTO für Ranges)
-│
-├── Enums/
-│   ├── FilterTypeEnum.php       ✓ Implementiert (SELECT, INTEGER, TEXT, BOOLEAN)
-│   ├── MatchModeEnum.php        ✓ Implementiert (IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY, NOT_EMPTY)
-│   ├── GroupOperatorEnum.php    ✓ Implementiert (AND, OR)
-│   └── RelationModeEnum.php     ✓ Implementiert (HAS, DOESNT_HAVE, HAS_NONE)
-│
-├── Selections/
-│   ├── FilterSelection.php      ✓ Implementiert (Gruppierung, JSON-Serialisierung, OR-Logik)
-│   ├── FilterGroup.php          ✓ Implementiert (AND/OR Gruppen, Verschachtelung)
-│   └── FilterGroupBuilder.php   ✓ Implementiert (Fluent API für Gruppen)
-│
-├── Query/
-│   └── QueryApplicator.php      ✓ Implementiert (Eloquent Builder, Sanitization, Validation)
-│
 ├── Concerns/
-│   └── Filterable.php           ✓ Implementiert (Model Trait)
-│
-├── Exceptions/
-│   └── FilterValidationException.php  ✓ Implementiert
-│
-└── Filters/
-    ├── Filter.php               ✓ Implementiert (Basisklasse mit apply, sanitizeValue, validationRules, typedValue, via, viaDoesntHave, withoutRelation)
-    ├── SelectFilter.php         ✓ Implementiert
-    ├── IntegerFilter.php        ✓ Implementiert
-    ├── TextFilter.php           ✓ Implementiert
-    ├── BooleanFilter.php        ✓ Implementiert
-    ├── HasOptions.php           ✓ Implementiert (Interface)
-    └── Dynamic/
-        ├── DynamicFilter.php    ✓ Implementiert
-        ├── DynamicSelectFilter.php   ✓ Implementiert
-        ├── DynamicIntegerFilter.php  ✓ Implementiert
-        ├── DynamicTextFilter.php     ✓ Implementiert
-        └── DynamicBooleanFilter.php  ✓ Implementiert
-
-tests/
-├── TutorialTest.php             ✓ 51 Tests als vollständiges Tutorial (inkl. Section 12: OR-Logik)
-├── Query/
-│   └── QueryApplicatorTest.php  ✓ 21 Tests für alle Match-Modi
+│   └── Filterable.php           # Model Trait
+├── Contracts/
+│   └── MatchModeContract.php    # Interface für MatchModes
+├── Data/
+│   ├── FilterDefinition.php     # Für dynamische Filter
+│   ├── FilterValue.php          # Filter + Mode + Value
+│   ├── FilterValueBuilder.php   # Fluent API
+│   └── BetweenValue.php         # DTO für Ranges
+├── Enums/
+│   ├── FilterTypeEnum.php       # SELECT, INTEGER, TEXT, BOOLEAN
+│   ├── GroupOperatorEnum.php    # AND, OR
+│   └── RelationModeEnum.php     # HAS, DOESNT_HAVE, HAS_NONE
 ├── Filters/
-│   ├── FilterClassTest.php      ✓ Tests für Filter-Klassen
-│   └── DynamicFilterTest.php    ✓ Tests für dynamische Filter
-├── Selections/
-│   ├── FilterSelectionTest.php  ✓ Tests für Selections
-│   └── FilterGroupTest.php      ✓ 25 Tests für OR-Logik und verschachtelte Gruppen
-└── Concerns/
-    └── FilterableTest.php       ✓ Tests für Filterable Trait
+│   ├── Filter.php               # Abstrakte Basisklasse
+│   ├── SelectFilter.php
+│   ├── IntegerFilter.php
+│   ├── TextFilter.php
+│   ├── BooleanFilter.php
+│   └── Dynamic/                 # Dynamische Filter ohne eigene Klasse
+├── MatchModes/                  # 17 MatchMode-Klassen
+│   ├── MatchMode.php            # Factory
+│   ├── IsMatchMode.php
+│   ├── IsNotMatchMode.php
+│   ├── AnyMatchMode.php
+│   ├── AllMatchMode.php
+│   ├── NoneMatchMode.php
+│   ├── GreaterThanMatchMode.php
+│   ├── GreaterThanOrEqualMatchMode.php
+│   ├── LessThanMatchMode.php
+│   ├── LessThanOrEqualMatchMode.php
+│   ├── BetweenMatchMode.php
+│   ├── ContainsMatchMode.php
+│   ├── StartsWithMatchMode.php
+│   ├── EndsWithMatchMode.php
+│   ├── RegexMatchMode.php
+│   ├── EmptyMatchMode.php
+│   └── NotEmptyMatchMode.php
+├── Query/
+│   └── QueryApplicator.php
+└── Selections/
+    ├── FilterSelection.php      # Hauptklasse
+    ├── FilterGroup.php          # AND/OR Gruppen
+    └── FilterGroupBuilder.php   # Fluent API
 
-Gesamt: 201 Tests
+tests/  → 207 Tests
 ```
 
 ## Kern-Konzepte
 
-### 1. Filter Definition
-
-Ein Filter definiert **WAS** gefiltert werden kann:
+### 1. Filter-Klasse definieren
 
 ```php
-$filter = SelectFilter::make('user_id')
-    ->label('Benutzer')
-    ->options(fn () => User::pluck('name', 'id'))
-    ->allowedMatchModes([
-        MatchModeEnum::IS,
-        MatchModeEnum::IS_NOT,
-        MatchModeEnum::EMPTY,
-    ]);
+<?php
+
+namespace App\Filters;
+
+use Ameax\FilterCore\Filters\SelectFilter;
+
+class StatusFilter extends SelectFilter
+{
+    public function column(): string
+    {
+        return 'status';
+    }
+
+    public function options(): array
+    {
+        return [
+            'active' => 'Aktiv',
+            'inactive' => 'Inaktiv',
+            'pending' => 'Ausstehend',
+        ];
+    }
+}
 ```
 
-### 2. Filter Value
-
-Ein FilterValue enthält den **aktuellen Zustand** eines Filters:
+### 2. Model mit Filterable Trait
 
 ```php
-$filterValue = FilterValue::make()
-    ->filter('user_id')
-    ->matchMode(MatchModeEnum::IS)
-    ->value([1, 2, 3]);
+<?php
+
+namespace App\Models;
+
+use Ameax\FilterCore\Concerns\Filterable;
+use App\Filters\StatusFilter;
+use App\Filters\CountFilter;
+
+class User extends Model
+{
+    use Filterable;
+
+    protected static function filterResolver(): \Closure
+    {
+        return fn () => [
+            StatusFilter::class,
+            CountFilter::class,
+        ];
+    }
+}
 ```
 
-### 3. Selection (Filter-Gruppe)
-
-Eine Selection kombiniert mehrere FilterValues mit Logik:
+### 3. Filter anwenden
 
 ```php
-$selection = Selection::make('Aktive Premium-Kunden')
-    ->where('status', MatchModeEnum::IS, 'active')
-    ->where('subscription', MatchModeEnum::ANY, ['premium', 'enterprise'])
-    ->orWhere(function (FilterGroup $group) {
-        $group->where('created_at', MatchModeEnum::GREATER_THAN, now()->subDays(30))
-              ->where('orders_count', MatchModeEnum::GREATER_THAN, 0);
+use Ameax\FilterCore\Selections\FilterSelection;
+use App\Filters\StatusFilter;
+use App\Filters\CountFilter;
+
+// Einfache Filterung
+$users = User::query()
+    ->applyFilter(FilterValue::for(StatusFilter::class)->is('active'))
+    ->get();
+
+// Mit Selection (mehrere Filter)
+$selection = FilterSelection::make()
+    ->where(StatusFilter::class)->is('active')
+    ->where(CountFilter::class)->gt(10);
+
+$users = User::query()->applySelection($selection)->get();
+
+// Mit OR-Logik
+$selection = FilterSelection::make()
+    ->where(StatusFilter::class)->is('active')
+    ->orWhere(function ($g) {
+        $g->where(StatusFilter::class)->is('pending');
+        $g->where(CountFilter::class)->gte(100);
     });
 ```
 
-### 4. Query Applicator ✓
+## Alle MatchModes
 
-Der Applicator wendet Filter auf Eloquent Queries an:
+| Key | Beschreibung | Beispiel |
+|-----|-------------|----------|
+| `is` | Gleichheit | `->is('active')` |
+| `isNot` | Ungleichheit | `->isNot('deleted')` |
+| `any` | Einer der Werte | `->any(['a', 'b'])` |
+| `all` | Alle Werte | `->all(['a', 'b'])` |
+| `none` | Keiner der Werte | `->none(['x', 'y'])` |
+| `gt` | Größer als | `->gt(10)` |
+| `gte` | Größer oder gleich | `->gte(10)` |
+| `lt` | Kleiner als | `->lt(100)` |
+| `lte` | Kleiner oder gleich | `->lte(100)` |
+| `between` | Zwischen | `->between(10, 100)` |
+| `contains` | Enthält Text | `->contains('search')` |
+| `startsWith` | Beginnt mit | `->startsWith('pre')` |
+| `endsWith` | Endet mit | `->endsWith('fix')` |
+| `regex` | Regular Expression | `->regex('^[A-Z].*')` |
+| `empty` | Ist leer/null | `->empty()` |
+| `notEmpty` | Ist nicht leer | `->notEmpty()` |
 
-```php
-use Ameax\FilterCore\Query\QueryApplicator;
-use Ameax\FilterCore\Data\FilterValue;
-use Ameax\FilterCore\Enums\MatchModeEnum;
-
-// QueryApplicator mit FilterDefinitions erstellen
-$applicator = QueryApplicator::for(User::query())
-    ->withDefinitions($filterDefinitions);
-
-// Einzelnen Filter anwenden
-$applicator->applyFilter(
-    FilterValue::make('status', MatchModeEnum::IS, 'active')
-);
-
-// Mehrere Filter anwenden
-$applicator->applyFilters([
-    FilterValue::make('status', MatchModeEnum::IS, 'active'),
-    FilterValue::make('count', MatchModeEnum::GREATER_THAN, 10),
-]);
-
-// Query abrufen und ausführen
-$users = $applicator->getQuery()->get();
-```
-
-## Value Processing Pipeline
-
-Der QueryApplicator verarbeitet Werte in einer definierten Pipeline:
-
-```
-Input → sanitizeValue() → typedValue() → validationRules() → apply()
-```
-
-### 1. Sanitization (sanitizeValue)
-
-Automatische Konvertierung von Input-Werten:
+## Relation Filter
 
 ```php
-// In Filter.php
-public function sanitizeValue(mixed $value, MatchModeEnum $mode): mixed
+// Filter über Relation (whereHas)
+DepartmentNameFilter::via('department')
+
+// Negiert (whereDoesntHave)
+DepartmentNameFilter::viaDoesntHave('department')
+
+// Ohne Relation
+SomeFilter::withoutRelation('department')
+```
+
+## JSON-Serialisierung
+
+```php
+// Speichern
+$json = $selection->toJson();
+
+// Laden
+$selection = FilterSelection::fromJson($json);
+
+// Format
 {
-    return $value; // Default: keine Transformation
+    "name": "Meine Filter",
+    "groups": [
+        {
+            "operator": "and",
+            "filters": [
+                {"filter": "StatusFilter", "mode": "is", "value": "active"}
+            ]
+        }
+    ]
 }
-
-// BooleanFilter: "true", "1", "yes" → true
-// IntegerFilter: "123" → 123, array → BetweenValue
-// TextFilter: trim($value)
-```
-
-### 2. Type Checking (typedValue)
-
-Strikte Typisierung mit PHP strict_types:
-
-```php
-// BooleanFilter
-public function typedValue(bool $value): bool
-
-// IntegerFilter
-public function typedValue(int|BetweenValue $value): int|BetweenValue
-
-// TextFilter
-public function typedValue(string $value): string
-
-// SelectFilter
-public function typedValue(string|array $value): string|array
-```
-
-Bei TypeError wird `FilterValidationException` geworfen.
-
-### 3. Validation (validationRules)
-
-Laravel Validation Rules:
-
-```php
-// In Filter.php
-public function validationRules(MatchModeEnum $mode): array
-{
-    return []; // Default: keine Validierung
-}
-
-// IntegerFilter
-public function validationRules(MatchModeEnum $mode): array
-{
-    return ['value' => 'required|numeric'];
-}
-
-// SelectFilter mit Options
-public function validationRules(MatchModeEnum $mode): array
-{
-    return ['value' => Rule::in(array_keys($this->options()))];
-}
-```
-
-### 4. Custom Apply (apply)
-
-Eigene Query-Logik pro Filter:
-
-```php
-public function apply(Builder|QueryBuilder $query, MatchModeEnum $mode, mixed $value): bool
-{
-    // Return true: Custom-Logik wurde angewendet
-    // Return false: Standard QueryApplicator-Logik verwenden
-    return false;
-}
-```
-
-## BetweenValue DTO
-
-Type-safe Repräsentation für BETWEEN-Werte:
-
-```php
-use Ameax\FilterCore\Data\BetweenValue;
-
-// Erstellen
-$between = new BetweenValue(min: 10, max: 100);
-$between = BetweenValue::fromArray(['min' => 10, 'max' => 100]);
-$between = BetweenValue::fromArray([10, 100]); // Indexed
-
-// Zugriff
-$between->min;  // 10
-$between->max;  // 100
-
-// Konvertierung
-$between->toArray();  // ['min' => 10, 'max' => 100]
 ```
 
 ## Weiterführende Dokumentation
 
-- [Filter-Typen](./filter-types.md) - Detaillierte Beschreibung aller Filter-Typen
-- [Match-Modi](./match-modes.md) - Verfügbare Match-Modi und ihre Logik
-- [Query-Integration](./query-integration.md) - Integration mit Query Buildern
-- [Selektionen](./selections.md) - Filter-Gruppen und Persistierung
+- [Filter-Typen](./filter-types.md) - SELECT, INTEGER, TEXT, BOOLEAN
+- [Match-Modi](./match-modes.md) - Alle 17 MatchModes im Detail
+- [Query-Integration](./query-integration.md) - Filterable Trait & QueryApplicator
+- [Selektionen](./selections.md) - Filter-Gruppen und OR-Logik
 - [UI-Adapter](./ui-adapters.md) - Konzept für UI-Packages
-
-## Migration vom bestehenden System
-
-Das neue System soll das bestehende `Support\Filters` System nicht ersetzen, sondern als eigenständiges Package entwickelt werden. Eine spätere Migration ist möglich durch:
-
-1. Adapter-Klassen für bestehende Filter
-2. Parallelbetrieb während der Übergangsphase
-3. Schrittweise Migration einzelner Domains
 
 ## Implementierungsstatus
 
-### Phase 1 (Abgeschlossen) ✅
-- [x] Core-Package Implementierung
-- [x] Filter-Typen (Select, Integer, Text, Boolean)
-- [x] Match-Modi (IS, IS_NOT, ANY, NONE, GT, LT, BETWEEN, CONTAINS, EMPTY)
-- [x] QueryApplicator mit Eloquent Integration
-- [x] FilterSelection für Persistierung
-- [x] Dynamic Filters
-- [x] Filterable Trait
-- [x] Value Sanitization Pipeline
-- [x] Value Validation mit Laravel Validator
-- [x] Type-Safe Values (typedValue)
-- [x] Custom Filter Logic (apply)
-- [x] BetweenValue DTO
+### Abgeschlossen ✅
 
-### Phase 2 (Abgeschlossen) ✅
-- [ ] Livewire/Flux UI-Package
-- [x] **Filter-Gruppen mit OR-Logik** ✅
-  - FilterGroup Klasse mit AND/OR Operatoren
-  - Unbegrenzte Verschachtelung von Gruppen
-  - FilterSelection::makeOr(), orWhere(), andWhere()
-  - JSON-Serialisierung mit Abwärtskompatibilität
-- [x] **Erweiterbares Match-Mode System** ✅
-  - Class-based MatchModes (MatchModeContract)
-  - Custom MatchModes registrierbar
-  - MatchMode::register() und MatchMode::get()
-- [x] **Model-basierte Validierung** ✅
-  - getFilterByKey(), getFilterKeys()
-  - validateSelection() für Vorab-Validierung
-  - scopeApplySelection() mit strict: false Option
-- [x] **Relation Filter Modi** ✅
-  - RelationModeEnum (HAS, DOESNT_HAVE, HAS_NONE)
-  - Filter::via() für whereHas
-  - Filter::viaDoesntHave() für whereDoesntHave
-  - Filter::withoutRelation() für Datensätze ohne Relation
+- Filter-Typen: Select, Integer, Text, Boolean
+- 17 MatchModes inkl. regex
+- QueryApplicator mit Eloquent Integration
+- FilterSelection mit OR-Logik
+- Verschachtelte FilterGroups
+- Dynamic Filters
+- Filterable Model Trait
+- Relation Filter (via, viaDoesntHave, withoutRelation)
+- JSON-Serialisierung
+- Value Sanitization & Validation
+- 207 Tests
 
-### Phase 3 (Geplant)
-- [ ] Filament-Integration
-- [ ] Zusätzliche Filter-Typen (Date, DateTime, Decimal)
+### Geplant
 
-### Phase 4 (Geplant)
-- [ ] Migration bestehender Filter
-- [ ] Performance-Optimierungen (N+1 bei Relations)
-- [ ] Debugging-Tools (toSql, explain)
+- Collection Filtering
+- Zusätzliche Filter-Typen (Date, DateTime, Decimal)
+- UI-Packages (separate Repositories)

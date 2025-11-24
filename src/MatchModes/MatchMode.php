@@ -16,13 +16,17 @@ use InvalidArgumentException;
  * @method static IsMatchMode is()
  * @method static IsNotMatchMode isNot()
  * @method static ContainsMatchMode contains()
+ * @method static StartsWithMatchMode startsWith()
+ * @method static EndsWithMatchMode endsWith()
  * @method static AnyMatchMode any()
+ * @method static AllMatchMode all()
  * @method static NoneMatchMode none()
- * @method static GreaterThanMatchMode greaterThan()
  * @method static GreaterThanMatchMode gt()
- * @method static LessThanMatchMode lessThan()
+ * @method static GreaterThanOrEqualMatchMode gte()
  * @method static LessThanMatchMode lt()
+ * @method static LessThanOrEqualMatchMode lte()
  * @method static BetweenMatchMode between()
+ * @method static RegexMatchMode regex()
  * @method static EmptyMatchMode empty()
  * @method static NotEmptyMatchMode notEmpty()
  */
@@ -149,23 +153,29 @@ class MatchMode
     protected static function registerDefaults(): void
     {
         self::$modes = array_merge([
-            // Primary names
+            // Primary names (short forms preferred)
             'is' => IsMatchMode::class,
             'isNot' => IsNotMatchMode::class,
             'contains' => ContainsMatchMode::class,
+            'startsWith' => StartsWithMatchMode::class,
+            'endsWith' => EndsWithMatchMode::class,
             'any' => AnyMatchMode::class,
+            'all' => AllMatchMode::class,
             'none' => NoneMatchMode::class,
-            'greaterThan' => GreaterThanMatchMode::class,
-            'lessThan' => LessThanMatchMode::class,
+            'gt' => GreaterThanMatchMode::class,
+            'gte' => GreaterThanOrEqualMatchMode::class,
+            'lt' => LessThanMatchMode::class,
+            'lte' => LessThanOrEqualMatchMode::class,
             'between' => BetweenMatchMode::class,
+            'regex' => RegexMatchMode::class,
             'empty' => EmptyMatchMode::class,
             'notEmpty' => NotEmptyMatchMode::class,
 
-            // Aliases (short forms)
-            'gt' => GreaterThanMatchMode::class,
-            'lt' => LessThanMatchMode::class,
+            // Snake_case aliases for JSON compatibility
             'is_not' => IsNotMatchMode::class,
             'not_empty' => NotEmptyMatchMode::class,
+            'starts_with' => StartsWithMatchMode::class,
+            'ends_with' => EndsWithMatchMode::class,
         ], self::$modes);
     }
 }

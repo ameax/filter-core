@@ -1118,7 +1118,7 @@ use App\Filters\KoiCountFilter;
 // Standard: Alle Filter werden mit AND verknüpft
 $selection = FilterSelection::make('Aktive Kois')
     ->where(KoiStatusFilter::class)->is('active')
-    ->where(KoiCountFilter::class)->greaterThan(5);
+    ->where(KoiCountFilter::class)->gt(5);
 
 // Generiert: status = 'active' AND count > 5
 
@@ -1148,7 +1148,7 @@ use Ameax\FilterCore\Selections\FilterGroup;
 
 // count > 5 AND (status = 'active' OR status = 'pending')
 $selection = FilterSelection::make()
-    ->where(KoiCountFilter::class)->greaterThan(5)
+    ->where(KoiCountFilter::class)->gt(5)
     ->orWhere(function (FilterGroup $g) {
         $g->where(KoiStatusFilter::class)->is('active');
         $g->where(KoiStatusFilter::class)->is('pending');
@@ -1162,7 +1162,7 @@ $selection = FilterSelection::make()
 $selection = FilterSelection::makeOr()
     ->andWhere(function (FilterGroup $g) {
         $g->where(KoiStatusFilter::class)->is('active');
-        $g->where(KoiCountFilter::class)->greaterThan(15);
+        $g->where(KoiCountFilter::class)->gt(15);
     })
     ->andWhere(function (FilterGroup $g) {
         $g->where(KoiStatusFilter::class)->is('pending');
@@ -1174,11 +1174,11 @@ $selection = FilterSelection::makeOr()
 ```php
 // count > 4 AND ((status = 'active' AND count > 10) OR (status = 'inactive'))
 $selection = FilterSelection::make()
-    ->where(KoiCountFilter::class)->greaterThan(4)
+    ->where(KoiCountFilter::class)->gt(4)
     ->orWhere(function (FilterGroup $or) {
         $or->andWhere(function (FilterGroup $and) {
             $and->where(KoiStatusFilter::class)->is('active');
-            $and->where(KoiCountFilter::class)->greaterThan(10);
+            $and->where(KoiCountFilter::class)->gt(10);
         });
         $or->andWhere(function (FilterGroup $and) {
             $and->where(KoiStatusFilter::class)->is('inactive');
@@ -1251,7 +1251,7 @@ use Ameax\FilterCore\Selections\FilterGroup;
 // AND-Gruppe erstellen
 $andGroup = FilterGroup::and()
     ->where(KoiStatusFilter::class)->is('active')
-    ->where(KoiCountFilter::class)->greaterThan(5);
+    ->where(KoiCountFilter::class)->gt(5);
 
 // OR-Gruppe erstellen
 $orGroup = FilterGroup::or()
@@ -1260,7 +1260,7 @@ $orGroup = FilterGroup::or()
 
 // Verschachtelte Gruppen
 $group = FilterGroup::and()
-    ->where(KoiCountFilter::class)->greaterThan(0)
+    ->where(KoiCountFilter::class)->gt(0)
     ->orWhere(fn($g) => $g
         ->where(KoiStatusFilter::class)->is('active')
         ->where(KoiStatusFilter::class)->is('pending')

@@ -7,6 +7,7 @@ use Ameax\FilterCore\Tests\Filters\KoiActiveFilter;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
 use Ameax\FilterCore\Tests\Filters\KoiNameFilter;
 use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
+use Ameax\FilterCore\Tests\Filters\KoiVarietyFilter;
 use Ameax\FilterCore\Tests\Filters\PondCapacityFilter;
 use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Closure;
@@ -39,6 +40,7 @@ class Koi extends Model
             KoiCountFilter::class,
             KoiNameFilter::class,
             KoiActiveFilter::class,
+            KoiVarietyFilter::class,
             // Relation filters
             PondWaterTypeFilter::via('pond'),
             PondCapacityFilter::via('pond'),

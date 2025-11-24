@@ -66,11 +66,12 @@ class FilterClassTest extends TestCase
         $filter = KoiStatusFilter::make();
         $modes = $filter->allowedModes();
 
-        $this->assertCount(4, $modes);
+        $this->assertCount(5, $modes);
         $this->assertEquals('is', $modes[0]->key());
         $this->assertEquals('is_not', $modes[1]->key());
         $this->assertEquals('any', $modes[2]->key());
-        $this->assertEquals('none', $modes[3]->key());
+        $this->assertEquals('all', $modes[3]->key());
+        $this->assertEquals('none', $modes[4]->key());
     }
 
     public function test_filter_class_key_is_class_basename(): void
@@ -148,7 +149,7 @@ class FilterClassTest extends TestCase
 
     public function test_filter_value_fluent_greater_than_shorthand(): void
     {
-        $filterValue = FilterValue::for(KoiCountFilter::class)->greaterThan(10);
+        $filterValue = FilterValue::for(KoiCountFilter::class)->gt(10);
 
         $this->assertInstanceOf(GreaterThanMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(10, $filterValue->getValue());
@@ -156,7 +157,7 @@ class FilterClassTest extends TestCase
 
     public function test_filter_value_fluent_less_than_shorthand(): void
     {
-        $filterValue = FilterValue::for(KoiCountFilter::class)->lessThan(10);
+        $filterValue = FilterValue::for(KoiCountFilter::class)->lt(10);
 
         $this->assertInstanceOf(LessThanMatchMode::class, $filterValue->getMatchMode());
         $this->assertEquals(10, $filterValue->getValue());
@@ -213,7 +214,7 @@ class FilterClassTest extends TestCase
             ])
             ->applyFilters([
                 FilterValue::for(KoiStatusFilter::class)->is('active'),
-                FilterValue::for(KoiCountFilter::class)->greaterThan(5),
+                FilterValue::for(KoiCountFilter::class)->gt(5),
             ])
             ->getQuery()
             ->get();
@@ -262,7 +263,7 @@ class FilterClassTest extends TestCase
             ->withFilters([
                 PondCapacityFilter::via('pond'),
             ])
-            ->applyFilter(FilterValue::for(PondCapacityFilter::class)->greaterThan(2500))
+            ->applyFilter(FilterValue::for(PondCapacityFilter::class)->gt(2500))
             ->getQuery()
             ->get();
 

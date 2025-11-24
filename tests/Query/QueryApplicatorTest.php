@@ -5,16 +5,21 @@ namespace Ameax\FilterCore\Tests\Query;
 use Ameax\FilterCore\Data\FilterDefinition;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
+use Ameax\FilterCore\MatchModes\AllMatchMode;
 use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\BetweenMatchMode;
 use Ameax\FilterCore\MatchModes\ContainsMatchMode;
 use Ameax\FilterCore\MatchModes\EmptyMatchMode;
+use Ameax\FilterCore\MatchModes\EndsWithMatchMode;
 use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
+use Ameax\FilterCore\MatchModes\GreaterThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\MatchModes\IsNotMatchMode;
 use Ameax\FilterCore\MatchModes\LessThanMatchMode;
+use Ameax\FilterCore\MatchModes\LessThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\MatchModes\NotEmptyMatchMode;
+use Ameax\FilterCore\MatchModes\StartsWithMatchMode;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\TestCase;
@@ -318,5 +323,79 @@ class QueryApplicatorTest extends TestCase
 
         $this->assertCount(3, $result);
         $this->assertTrue($result->every(fn ($koi) => $koi->variety !== null));
+    }
+
+    public function test_applies_greater_than_or_equal_match_mode(): void
+    {
+        $result = QueryApplicator::for(Koi::query())
+            ->withDefinitions($this->getDefinitions())
+            ->applyFilter(FilterValue::make('count', new GreaterThanOrEqualMatchMode, 10))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(3, $result);
+        $this->assertTrue($result->every(fn ($koi) => $koi->count >= 10));
+    }
+
+    public function test_applies_less_than_or_equal_match_mode(): void
+    {
+        $result = QueryApplicator::for(Koi::query())
+            ->withDefinitions($this->getDefinitions())
+            ->applyFilter(FilterValue::make('count', new LessThanOrEqualMatchMode, 10))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(3, $result);
+        $this->assertTrue($result->every(fn ($koi) => $koi->count <= 10));
+    }
+
+    public function test_applies_starts_with_match_mode(): void
+    {
+        $result = QueryApplicator::for(Koi::query())
+            ->withDefinitions($this->getDefinitions())
+            ->applyFilter(FilterValue::make('name', new StartsWithMatchMode, 'Sh'))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(2, $result);
+        $this->assertEquals(['Showa', 'Shusui'], $result->pluck('name')->sort()->values()->all());
+    }
+
+    public function test_applies_ends_with_match_mode(): void
+    {
+        $result = QueryApplicator::for(Koi::query())
+            ->withDefinitions($this->getDefinitions())
+            ->applyFilter(FilterValue::make('name', new EndsWithMatchMode, 'ku'))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('Kohaku', $result->first()->name);
+    }
+
+    public function test_applies_all_match_mode_with_single_value(): void
+    {
+        // With single value, ALL behaves like IS
+        $result = QueryApplicator::for(Koi::query())
+            ->withDefinitions($this->getDefinitions())
+            ->applyFilter(FilterValue::make('status', new AllMatchMode, ['active']))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(2, $result);
+        $this->assertTrue($result->every(fn ($koi) => $koi->status === 'active'));
+    }
+
+    public function test_applies_all_match_mode_with_multiple_values_returns_empty(): void
+    {
+        // With multiple values on a regular column, ALL is impossible
+        // A single column can't be two different values simultaneously
+        $result = QueryApplicator::for(Koi::query())
+            ->withDefinitions($this->getDefinitions())
+            ->applyFilter(FilterValue::make('status', new AllMatchMode, ['active', 'pending']))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(0, $result);
     }
 }

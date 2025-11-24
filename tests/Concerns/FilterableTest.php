@@ -43,7 +43,7 @@ class FilterableTest extends TestCase
     {
         $filters = Koi::getFilters();
 
-        $this->assertCount(6, $filters);
+        $this->assertCount(7, $filters);
     }
 
     public function test_filters_are_cached(): void
@@ -86,7 +86,7 @@ class FilterableTest extends TestCase
         $result = Koi::query()
             ->applyFilters([
                 FilterValue::for(KoiStatusFilter::class)->is('active'),
-                FilterValue::for(KoiCountFilter::class)->greaterThan(5),
+                FilterValue::for(KoiCountFilter::class)->gt(5),
             ])
             ->get();
 
@@ -165,7 +165,7 @@ class FilterableTest extends TestCase
     {
         $result = Pond::query()
             ->applyFilters([
-                FilterValue::for(PondCapacityFilter::class)->greaterThan(2500),
+                FilterValue::for(PondCapacityFilter::class)->gt(2500),
             ])
             ->get();
 
@@ -207,7 +207,7 @@ class FilterableTest extends TestCase
     {
         // Relation filters are automatically applied via whereHas
         $result = Koi::query()
-            ->applyFilter(FilterValue::for(PondCapacityFilter::class)->greaterThan(4000))
+            ->applyFilter(FilterValue::for(PondCapacityFilter::class)->gt(4000))
             ->get();
 
         // Only fresh pond has capacity > 4000
@@ -223,7 +223,7 @@ class FilterableTest extends TestCase
     {
         $keys = Koi::getFilterKeys();
 
-        $this->assertCount(6, $keys);
+        $this->assertCount(7, $keys);
         $this->assertContains('KoiStatusFilter', $keys);
         $this->assertContains('KoiCountFilter', $keys);
         $this->assertContains('PondWaterTypeFilter', $keys);
@@ -258,7 +258,7 @@ class FilterableTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->add(FilterValue::for(KoiStatusFilter::class)->is('active'))
-            ->add(FilterValue::for(KoiCountFilter::class)->greaterThan(5));
+            ->add(FilterValue::for(KoiCountFilter::class)->gt(5));
 
         $result = Koi::validateSelection($selection);
 

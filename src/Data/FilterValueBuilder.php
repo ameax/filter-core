@@ -102,19 +102,19 @@ final class FilterValueBuilder
     }
 
     /**
-     * GREATER_THAN match mode.
+     * GT (>) match mode.
      */
-    public function greaterThan(int|float $value): FilterValue|FilterSelection
+    public function gt(int|float $value): FilterValue|FilterSelection
     {
-        return $this->mode(MatchMode::greaterThan())->value($value);
+        return $this->mode(MatchMode::gt())->value($value);
     }
 
     /**
-     * LESS_THAN match mode.
+     * LT (<) match mode.
      */
-    public function lessThan(int|float $value): FilterValue|FilterSelection
+    public function lt(int|float $value): FilterValue|FilterSelection
     {
-        return $this->mode(MatchMode::lessThan())->value($value);
+        return $this->mode(MatchMode::lt())->value($value);
     }
 
     /**
@@ -147,6 +147,56 @@ final class FilterValueBuilder
     public function notEmpty(): FilterValue|FilterSelection
     {
         return $this->mode(MatchMode::notEmpty())->value(null);
+    }
+
+    /**
+     * ALL match mode (all values must match).
+     *
+     * @param  array<mixed>  $values
+     */
+    public function all(array $values): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::all())->value($values);
+    }
+
+    /**
+     * GTE (>=) match mode.
+     */
+    public function gte(int|float $value): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::gte())->value($value);
+    }
+
+    /**
+     * LTE (<=) match mode.
+     */
+    public function lte(int|float $value): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::lte())->value($value);
+    }
+
+    /**
+     * STARTS_WITH match mode.
+     */
+    public function startsWith(string $value): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::startsWith())->value($value);
+    }
+
+    /**
+     * ENDS_WITH match mode.
+     */
+    public function endsWith(string $value): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::endsWith())->value($value);
+    }
+
+    /**
+     * REGEX match mode.
+     */
+    public function regex(string $pattern): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::regex())->value($pattern);
     }
 
     /**

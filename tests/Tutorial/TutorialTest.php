@@ -1,7 +1,8 @@
 <?php
 
-namespace Ameax\FilterCore\Tests;
+namespace Ameax\FilterCore\Tests\Tutorial;
 
+use Ameax\FilterCore\Tests\TestCase;
 use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
@@ -193,7 +194,7 @@ class TutorialTest extends TestCase
     /**
      * Syntax Variant C: Fluent builder with shorthand methods.
      *
-     * More readable! Shorthand methods like is(), any(), greaterThan()
+     * More readable! Shorthand methods like is(), any(), gt()
      * automatically set both the mode and value.
      */
     public function test_2_3_syntax_variant_fluent_shorthand(): void
@@ -311,13 +312,13 @@ class TutorialTest extends TestCase
     {
         // GREATER_THAN: count > 10
         $moreThan10 = Koi::query()
-            ->applyFilter(FilterValue::for(KoiCountFilter::class)->greaterThan(10))
+            ->applyFilter(FilterValue::for(KoiCountFilter::class)->gt(10))
             ->get();
         $this->assertCount(2, $moreThan10); // Kohaku (20), Asagi (15)
 
         // LESS_THAN: count < 10
         $lessThan10 = Koi::query()
-            ->applyFilter(FilterValue::for(KoiCountFilter::class)->lessThan(10))
+            ->applyFilter(FilterValue::for(KoiCountFilter::class)->lt(10))
             ->get();
         $this->assertCount(2, $lessThan10); // Sanke (5), Shusui (0)
 
@@ -465,7 +466,7 @@ class TutorialTest extends TestCase
     {
         // Find kois in ponds with capacity > 4000
         $result = Koi::query()
-            ->applyFilter(FilterValue::for(PondCapacityFilter::class)->greaterThan(4000))
+            ->applyFilter(FilterValue::for(PondCapacityFilter::class)->gt(4000))
             ->get();
 
         // Only Fresh Pond has capacity > 4000
@@ -572,7 +573,7 @@ class TutorialTest extends TestCase
         // Using where() - more readable!
         $selection = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         $result = Koi::query()->applyFilters($selection)->get();
 
@@ -588,12 +589,12 @@ class TutorialTest extends TestCase
         // Using add()
         $selectionAdd = FilterSelection::make()
             ->add(FilterValue::for(KoiStatusFilter::class)->is('active'))
-            ->add(FilterValue::for(KoiCountFilter::class)->greaterThan(5));
+            ->add(FilterValue::for(KoiCountFilter::class)->gt(5));
 
         // Using where()
         $selectionWhere = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         // Both produce the same results
         $resultAdd = Koi::query()->applyFilters($selectionAdd)->get();
@@ -636,7 +637,7 @@ class TutorialTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         $this->assertEquals(2, $selection->count());
 
@@ -665,7 +666,7 @@ class TutorialTest extends TestCase
         $selection = FilterSelection::make('My Saved Filter')
             ->description('A filter I want to save')
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(10);
+            ->where(KoiCountFilter::class)->gt(10);
 
         $json = $selection->toJson();
         $data = json_decode($json, true);
@@ -807,7 +808,7 @@ class TutorialTest extends TestCase
                 ->toJson(),
 
             'high_count' => FilterSelection::make('High Count')
-                ->where(KoiCountFilter::class)->greaterThan(10)
+                ->where(KoiCountFilter::class)->gt(10)
                 ->toJson(),
 
             'fresh_water' => FilterSelection::make('Fresh Water')
@@ -1117,9 +1118,11 @@ class TutorialTest extends TestCase
      *
      * Built-in modes:
      * - IsMatchMode, IsNotMatchMode
-     * - ContainsMatchMode
-     * - AnyMatchMode, NoneMatchMode
-     * - GreaterThanMatchMode, LessThanMatchMode, BetweenMatchMode
+     * - ContainsMatchMode, StartsWithMatchMode, EndsWithMatchMode
+     * - AnyMatchMode, AllMatchMode, NoneMatchMode
+     * - GreaterThanMatchMode, GreaterThanOrEqualMatchMode
+     * - LessThanMatchMode, LessThanOrEqualMatchMode
+     * - BetweenMatchMode
      * - EmptyMatchMode, NotEmptyMatchMode
      */
     public function test_11_1_matchmode_classes(): void
@@ -1171,20 +1174,22 @@ class TutorialTest extends TestCase
      * The MatchMode class provides static factory methods:
      * - MatchMode::is() → IsMatchMode
      * - MatchMode::contains() → ContainsMatchMode
-     * - MatchMode::greaterThan() → GreaterThanMatchMode
+     * - MatchMode::gt() → GreaterThanMatchMode
      * etc.
      */
     public function test_11_3_matchmode_factory(): void
     {
         // Factory methods return mode instances via __callStatic
         $this->assertInstanceOf(IsMatchMode::class, MatchMode::is());
-        $this->assertInstanceOf(GreaterThanMatchMode::class, MatchMode::greaterThan());
+        $this->assertInstanceOf(GreaterThanMatchMode::class, MatchMode::gt());
         $this->assertInstanceOf(BetweenMatchMode::class, MatchMode::between());
 
         // All built-in modes are accessible:
-        // MatchMode::is(), isNot(), contains()
-        // MatchMode::any(), none()
-        // MatchMode::greaterThan(), lessThan(), between()
+        // MatchMode::is(), isNot()
+        // MatchMode::contains(), startsWith(), endsWith(), regex()
+        // MatchMode::any(), all(), none()
+        // MatchMode::gt(), gte(), lt(), lte()
+        // MatchMode::between()
         // MatchMode::empty(), notEmpty()
     }
 
@@ -1253,7 +1258,7 @@ class TutorialTest extends TestCase
 
         // Add filters to a group
         $andGroup->where(KoiStatusFilter::class)->is('active');
-        $andGroup->where(KoiCountFilter::class)->greaterThan(5);
+        $andGroup->where(KoiCountFilter::class)->gt(5);
 
         $this->assertEquals(2, $andGroup->count());
         $this->assertFalse($andGroup->isEmpty());
@@ -1291,7 +1296,7 @@ class TutorialTest extends TestCase
     public function test_12_3_and_with_nested_or(): void
     {
         $selection = FilterSelection::make()
-            ->where(KoiCountFilter::class)->greaterThan(5)
+            ->where(KoiCountFilter::class)->gt(5)
             ->orWhere(function (FilterGroup $group) {
                 $group->where(KoiStatusFilter::class)->is('active');
                 $group->where(KoiStatusFilter::class)->is('pending');
@@ -1319,7 +1324,7 @@ class TutorialTest extends TestCase
         $selection = FilterSelection::makeOr()
             ->andWhere(function (FilterGroup $group) {
                 $group->where(KoiStatusFilter::class)->is('active');
-                $group->where(KoiCountFilter::class)->greaterThan(15);
+                $group->where(KoiCountFilter::class)->gt(15);
             })
             ->andWhere(function (FilterGroup $group) {
                 $group->where(KoiStatusFilter::class)->is('pending');
@@ -1343,11 +1348,11 @@ class TutorialTest extends TestCase
     {
         // count >= 5 AND ((status = 'active' AND count > 10) OR (status = 'inactive'))
         $selection = FilterSelection::make()
-            ->where(KoiCountFilter::class)->greaterThan(4) // >= 5
+            ->where(KoiCountFilter::class)->gt(4) // >= 5
             ->orWhere(function (FilterGroup $or) {
                 $or->andWhere(function (FilterGroup $and) {
                     $and->where(KoiStatusFilter::class)->is('active');
-                    $and->where(KoiCountFilter::class)->greaterThan(10);
+                    $and->where(KoiCountFilter::class)->gt(10);
                 });
                 $or->andWhere(function (FilterGroup $and) {
                     $and->where(KoiStatusFilter::class)->is('inactive');
@@ -1414,7 +1419,7 @@ class TutorialTest extends TestCase
         // Simple AND selection uses legacy format
         $simpleSelection = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         $simpleArray = $simpleSelection->toArray();
         $this->assertArrayHasKey('filters', $simpleArray);
@@ -1442,7 +1447,7 @@ class TutorialTest extends TestCase
     {
         // Create complex selection
         $original = FilterSelection::make('Complex Query')
-            ->where(KoiCountFilter::class)->greaterThan(5)
+            ->where(KoiCountFilter::class)->gt(5)
             ->orWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('active');
                 $g->where(KoiStatusFilter::class)->is('pending');
@@ -1481,13 +1486,13 @@ class TutorialTest extends TestCase
         $simpleWay = Koi::query()
             ->applyFilters([
                 FilterValue::for(KoiStatusFilter::class)->any($selectedStatuses),
-                FilterValue::for(KoiCountFilter::class)->greaterThan($minCount - 1),
+                FilterValue::for(KoiCountFilter::class)->gt($minCount - 1),
             ])
             ->get();
 
         // Or with explicit OR groups (more flexible for complex cases)
         $selection = FilterSelection::make()
-            ->where(KoiCountFilter::class)->greaterThan($minCount - 1)
+            ->where(KoiCountFilter::class)->gt($minCount - 1)
             ->orWhere(function (FilterGroup $g) use ($selectedStatuses) {
                 foreach ($selectedStatuses as $status) {
                     $g->where(KoiStatusFilter::class)->is($status);
@@ -1510,7 +1515,7 @@ class TutorialTest extends TestCase
             ->where(KoiStatusFilter::class)->is('active')
             ->orWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('pending');
-                $g->where(KoiCountFilter::class)->greaterThan(10);
+                $g->where(KoiCountFilter::class)->gt(10);
             });
 
         // Check if selection has nested groups

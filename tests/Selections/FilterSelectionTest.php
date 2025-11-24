@@ -78,7 +78,7 @@ class FilterSelectionTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->add(FilterValue::for(KoiStatusFilter::class)->is('active'))
-            ->add(FilterValue::for(KoiCountFilter::class)->greaterThan(5));
+            ->add(FilterValue::for(KoiCountFilter::class)->gt(5));
 
         $this->assertEquals(2, $selection->count());
     }
@@ -91,7 +91,7 @@ class FilterSelectionTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         $this->assertEquals(2, $selection->count());
         $this->assertTrue($selection->has(KoiStatusFilter::class));
@@ -146,7 +146,7 @@ class FilterSelectionTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->add(FilterValue::for(KoiStatusFilter::class)->is('active'))
-            ->add(FilterValue::for(KoiCountFilter::class)->greaterThan(5));
+            ->add(FilterValue::for(KoiCountFilter::class)->gt(5));
 
         $selection->remove(KoiStatusFilter::class);
 
@@ -159,7 +159,7 @@ class FilterSelectionTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->add(FilterValue::for(KoiStatusFilter::class)->is('active'))
-            ->add(FilterValue::for(KoiCountFilter::class)->greaterThan(5));
+            ->add(FilterValue::for(KoiCountFilter::class)->gt(5));
 
         $selection->clear();
 
@@ -254,7 +254,7 @@ class FilterSelectionTest extends TestCase
     {
         $selection = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         $result = Koi::query()->applyFilters($selection)->get();
 
@@ -277,7 +277,7 @@ class FilterSelectionTest extends TestCase
         $selection = FilterSelection::make('Saved Filter')
             ->description('My saved filter configuration')
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(10);
+            ->where(KoiCountFilter::class)->gt(10);
 
         $json = $selection->toJson();
 

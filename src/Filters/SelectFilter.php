@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\Filters;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicSelectFilter;
+use Ameax\FilterCore\MatchModes\AllMatchMode;
 use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\MatchModes\IsNotMatchMode;
@@ -42,6 +43,7 @@ abstract class SelectFilter extends Filter implements HasOptions
             new IsMatchMode,
             new IsNotMatchMode,
             new AnyMatchMode,
+            new AllMatchMode,
             new NoneMatchMode,
         ];
     }
@@ -51,6 +53,11 @@ abstract class SelectFilter extends Filter implements HasOptions
      */
     public function validationRules(MatchModeContract $mode): array
     {
+        // empty/notEmpty modes don't require a value
+        if (in_array($mode->key(), ['empty', 'notEmpty', 'not_empty'], true)) {
+            return [];
+        }
+
         $options = $this->options();
 
         // If no options defined, allow any value
@@ -62,8 +69,8 @@ abstract class SelectFilter extends Filter implements HasOptions
 
         $allowedValues = array_keys($options);
 
-        // ANY and NONE modes expect arrays
-        if (in_array($mode->key(), ['any', 'none'], true)) {
+        // ANY, ALL and NONE modes expect arrays
+        if (in_array($mode->key(), ['any', 'all', 'none'], true)) {
             return [
                 'value' => 'required|array',
                 'value.*' => Rule::in($allowedValues),
@@ -80,11 +87,12 @@ abstract class SelectFilter extends Filter implements HasOptions
      *
      * Can be used directly for strict typing, bypassing sanitize/validate.
      * Accepts string for IS/IS_NOT modes or array for ANY/NONE modes.
+     * Also accepts null for empty/notEmpty modes on nullable filters.
      *
-     * @param  string|array<string>  $value
-     * @return string|array<string>
+     * @param  string|array<string>|null  $value
+     * @return string|array<string>|null
      */
-    public function typedValue(string|array $value): string|array
+    public function typedValue(string|array|null $value): string|array|null
     {
         return $value;
     }

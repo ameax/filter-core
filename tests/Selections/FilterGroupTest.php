@@ -84,7 +84,7 @@ class FilterGroupTest extends TestCase
         $group->where(KoiStatusFilter::class)->is('active');
         $group->orWhere(function (FilterGroup $g) {
             $g->where(KoiStatusFilter::class)->is('pending');
-            $g->where(KoiCountFilter::class)->greaterThan(5);
+            $g->where(KoiCountFilter::class)->gt(5);
         });
 
         $allValues = $group->getAllFilterValues();
@@ -96,7 +96,7 @@ class FilterGroupTest extends TestCase
     {
         $group = FilterGroup::and();
         $group->where(KoiStatusFilter::class)->is('active');
-        $group->where(KoiCountFilter::class)->greaterThan(5);
+        $group->where(KoiCountFilter::class)->gt(5);
         $group->where(KoiStatusFilter::class)->is('pending'); // duplicate key
 
         $keys = $group->getAllFilterKeys();
@@ -218,7 +218,7 @@ class FilterGroupTest extends TestCase
             ->where(KoiStatusFilter::class)->is('active')
             ->orWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('pending');
-                $g->where(KoiCountFilter::class)->greaterThan(10);
+                $g->where(KoiCountFilter::class)->gt(10);
             });
 
         $array = $selection->toArray();
@@ -234,7 +234,7 @@ class FilterGroupTest extends TestCase
         // Simple AND selection should use legacy format
         $selection = FilterSelection::make()
             ->where(KoiStatusFilter::class)->is('active')
-            ->where(KoiCountFilter::class)->greaterThan(5);
+            ->where(KoiCountFilter::class)->gt(5);
 
         $array = $selection->toArray();
 
@@ -273,7 +273,7 @@ class FilterGroupTest extends TestCase
             ->where(KoiStatusFilter::class)->is('active')
             ->orWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('pending');
-                $g->where(KoiCountFilter::class)->greaterThan(10);
+                $g->where(KoiCountFilter::class)->gt(10);
             });
 
         $json = $original->toJson();
@@ -307,7 +307,7 @@ class FilterGroupTest extends TestCase
     {
         // count > 5 AND (status = 'active' OR status = 'pending')
         $selection = FilterSelection::make()
-            ->where(KoiCountFilter::class)->greaterThan(5)
+            ->where(KoiCountFilter::class)->gt(5)
             ->orWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('active');
                 $g->where(KoiStatusFilter::class)->is('pending');
@@ -329,7 +329,7 @@ class FilterGroupTest extends TestCase
         $selection = FilterSelection::makeOr()
             ->andWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('active');
-                $g->where(KoiCountFilter::class)->greaterThan(15);
+                $g->where(KoiCountFilter::class)->gt(15);
             })
             ->andWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('pending');
@@ -352,8 +352,8 @@ class FilterGroupTest extends TestCase
             ->andWhere(function (FilterGroup $g) {
                 $g->where(KoiStatusFilter::class)->is('active');
                 $g->orWhere(function (FilterGroup $inner) {
-                    $inner->where(KoiCountFilter::class)->greaterThan(15);
-                    $inner->where(KoiCountFilter::class)->lessThan(5);
+                    $inner->where(KoiCountFilter::class)->gt(15);
+                    $inner->where(KoiCountFilter::class)->lt(5);
                 });
             })
             ->andWhere(function (FilterGroup $g) {
@@ -435,7 +435,7 @@ class FilterGroupTest extends TestCase
             ->orWhere(function (FilterGroup $or) {
                 $or->andWhere(function (FilterGroup $and) {
                     $and->where(KoiStatusFilter::class)->is('active');
-                    $and->where(KoiCountFilter::class)->greaterThan(10);
+                    $and->where(KoiCountFilter::class)->gt(10);
                 });
                 $or->andWhere(function (FilterGroup $and) {
                     $and->where(KoiStatusFilter::class)->is('inactive');
