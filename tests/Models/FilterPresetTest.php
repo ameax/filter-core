@@ -4,11 +4,9 @@ namespace Ameax\FilterCore\Tests\Models;
 
 use Ameax\FilterCore\Models\FilterPreset;
 use Ameax\FilterCore\Selections\FilterSelection;
-use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
-use Ameax\FilterCore\Tests\Models\Koi;
+use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
 use Ameax\FilterCore\Tests\TestCase;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 
 class FilterPresetTest extends TestCase
 {
