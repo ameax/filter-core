@@ -4,13 +4,17 @@ This directory contains individual TODO items for the filter-core package. Each 
 
 ## Summary
 
-All critical, high-priority, and medium-priority issues have been **resolved**. The remaining items are developer experience improvements and advanced features.
+**High-priority items**: Three new filter types (Date, DateTime, Decimal) needed for common database column types. These include relative date/time expressions like "older than 30 days" or "last year" for better user experience.
+
+**Low-priority items**: Developer experience improvements and advanced features.
 
 ## Issues by Priority
 
 ### High Priority
 
-✅ **All high-priority issues resolved!**
+1. **[DateFilter Type](09-date-filter.md)** - No built-in filter type for DATE columns
+2. **[DateTimeFilter Type](10-datetime-filter.md)** - No built-in filter type for DATETIME/TIMESTAMP columns
+3. **[DecimalFilter Type](11-decimal-filter.md)** - No built-in filter type for DECIMAL/FLOAT columns
 
 ### Medium Priority
 
