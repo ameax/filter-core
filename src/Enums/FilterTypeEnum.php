@@ -34,36 +34,4 @@ enum FilterTypeEnum: string
             self::BOOLEAN => __('filter-core::enums.filter_type.boolean'),
         };
     }
-
-    /**
-     * Get default allowed match modes for this filter type.
-     *
-     * @return array<MatchModeEnum>
-     */
-    public function defaultMatchModes(): array
-    {
-        return match ($this) {
-            self::SELECT => [
-                MatchModeEnum::IS,
-                MatchModeEnum::IS_NOT,
-                MatchModeEnum::ANY,
-                MatchModeEnum::NONE,
-            ],
-            self::INTEGER => [
-                MatchModeEnum::IS,
-                MatchModeEnum::IS_NOT,
-                MatchModeEnum::GREATER_THAN,
-                MatchModeEnum::LESS_THAN,
-                MatchModeEnum::BETWEEN,
-            ],
-            self::TEXT => [
-                MatchModeEnum::CONTAINS,
-                MatchModeEnum::IS,
-                MatchModeEnum::IS_NOT,
-            ],
-            self::BOOLEAN => [
-                MatchModeEnum::IS,
-            ],
-        };
-    }
 }

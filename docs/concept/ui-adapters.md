@@ -37,42 +37,39 @@ Das UI-Adapter-System ermöglicht die Verwendung des Filter-Cores in verschieden
 
 ---
 
-## FilterPresenter (Core)
+## FilterPresenter (Konzept für Core)
 
 Die Presenter-Klasse bereitet Filter-Daten für die UI auf:
 
 ```php
 <?php
 
-namespace Ameax\Filter\Presenters;
+namespace Ameax\FilterCore\Presenters;
 
-use Ameax\Filter\Contracts\FilterContract;
-use Ameax\Filter\Contracts\FilterSetContract;
-use Ameax\Filter\Enums\FilterTypeEnum;
-use Ameax\Filter\Enums\MatchModeEnum;
-use Ameax\Filter\Selections\Selection;
+use Ameax\FilterCore\Contracts\MatchModeContract;
+use Ameax\FilterCore\Enums\FilterTypeEnum;
+use Ameax\FilterCore\Selections\FilterSelection;
 
 class FilterPresenter
 {
     public function __construct(
-        protected FilterSetContract $filterSet,
-        protected ?Selection $selection = null,
-    ) {
-    }
+        protected array $filters,
+        protected ?FilterSelection $selection = null,
+    ) {}
 
     /**
      * Gibt alle Filter als Array für die UI zurück.
      */
     public function toArray(): array
     {
-        $filters = [];
+        $presented = [];
 
-        foreach ($this->filterSet->getFilters() as $key => $filter) {
-            $filters[$key] = $this->presentFilter($filter);
+        foreach ($this->filters as $filter) {
+            $presented[$filter::key()] = $this->presentFilter($filter);
         }
 
         return [
-            'filters' => $filters,
+            'filters' => $presented,
             'selection' => $this->selection?->toArray(),
             'activeFilters' => $this->getActiveFilters(),
         ];
@@ -89,24 +86,21 @@ class FilterPresenter
     /**
      * Präsentiert einen einzelnen Filter.
      */
-    protected function presentFilter(FilterContract $filter): array
+    protected function presentFilter($filter): array
     {
-        $definition = $filter->toDefinition();
-        $currentValue = $this->getCurrentValue($filter->getKey());
+        $currentValue = $this->getCurrentValue($filter::key());
 
         return [
-            'key' => $definition->key,
-            'type' => $definition->type->value,
-            'label' => $definition->label,
-            'allowedMatchModes' => $this->presentMatchModes($definition->allowedMatchModes),
-            'defaultMatchMode' => $definition->defaultMatchMode->value,
-            'currentMatchMode' => $currentValue?->getMatchMode()->value ?? $definition->defaultMatchMode->value,
-            'currentValue' => $currentValue?->getValue() ?? $definition->defaultValue,
+            'key' => $filter::key(),
+            'type' => $filter->type()->value,
+            'label' => $filter->label(),
+            'allowedMatchModes' => $this->presentMatchModes($filter->allowedModes()),
+            'defaultMatchMode' => $filter->defaultMode()->key(),
+            'currentMatchMode' => $currentValue?->getMatchMode()->key() ?? $filter->defaultMode()->key(),
+            'currentValue' => $currentValue?->getValue(),
             'hasValue' => $currentValue !== null,
-            'nullable' => $definition->nullable,
+            'nullable' => $filter->nullable(),
             'options' => $this->presentOptions($filter),
-            'meta' => $definition->meta,
-            'config' => $this->getTypeConfig($filter),
         ];
     }
 
@@ -115,26 +109,22 @@ class FilterPresenter
      */
     protected function presentMatchModes(array $modes): array
     {
-        return array_map(fn (MatchModeEnum $mode) => [
-            'value' => $mode->value,
+        return array_map(fn (MatchModeContract $mode) => [
+            'key' => $mode->key(),
             'label' => $mode->label(),
-            'symbol' => $mode->symbol(),
-            'supportsMultiple' => $mode->supportsMultipleValues(),
-            'requiresRange' => $mode->requiresRange(),
-            'requiresNoValue' => $mode->requiresNoValue(),
         ], $modes);
     }
 
     /**
      * Präsentiert Options für Select-Filter.
      */
-    protected function presentOptions(FilterContract $filter): array
+    protected function presentOptions($filter): array
     {
-        if (!method_exists($filter, 'getOptions')) {
+        if (!method_exists($filter, 'options')) {
             return [];
         }
 
-        $options = $filter->getOptions();
+        $options = $filter->options();
 
         return array_map(fn ($label, $value) => [
             'value' => $value,
@@ -143,60 +133,11 @@ class FilterPresenter
     }
 
     /**
-     * Gibt typ-spezifische Konfiguration zurück.
-     */
-    protected function getTypeConfig(FilterContract $filter): array
-    {
-        $config = [];
-        $definition = $filter->toDefinition();
-
-        switch ($definition->type) {
-            case FilterTypeEnum::NUMBER:
-            case FilterTypeEnum::NUMBER_RANGE:
-                $config = [
-                    'min' => $filter->getMin() ?? null,
-                    'max' => $filter->getMax() ?? null,
-                    'step' => $filter->getStep() ?? 1,
-                    'decimals' => $filter->getDecimals() ?? 0,
-                    'unit' => $filter->getUnit() ?? null,
-                ];
-                break;
-
-            case FilterTypeEnum::DATE:
-            case FilterTypeEnum::DATE_RANGE:
-                $config = [
-                    'withTime' => $filter->getWithTime() ?? false,
-                    'displayFormat' => $filter->getDisplayFormat() ?? 'Y-m-d',
-                    'presets' => $filter->getPresets() ?? [],
-                ];
-                break;
-
-            case FilterTypeEnum::TEXT:
-                $config = [
-                    'minLength' => $filter->getMinLength() ?? null,
-                    'maxLength' => $filter->getMaxLength() ?? null,
-                    'placeholder' => $filter->getPlaceholder() ?? null,
-                ];
-                break;
-
-            case FilterTypeEnum::SELECT:
-            case FilterTypeEnum::MULTI_SELECT:
-                $config = [
-                    'searchable' => $filter->isSearchable() ?? false,
-                    'searchUrl' => $filter->getSearchUrl() ?? null,
-                ];
-                break;
-        }
-
-        return $config;
-    }
-
-    /**
      * Gibt aktuelle Filter-Werte aus der Selection zurück.
      */
     protected function getCurrentValue(string $filterKey): ?FilterValue
     {
-        return $this->selection?->getFilterValue($filterKey);
+        return $this->selection?->get($filterKey);
     }
 
     /**
@@ -210,56 +151,15 @@ class FilterPresenter
 
         $active = [];
 
-        foreach ($this->selection->getFilterValues() as $filterValue) {
-            $filter = $this->filterSet->getFilter($filterValue->getFilterKey());
-
-            if ($filter === null) {
-                continue;
-            }
-
+        foreach ($this->selection->all() as $filterValue) {
             $active[] = [
                 'key' => $filterValue->getFilterKey(),
-                'label' => $filter->getLabel(),
-                'matchMode' => $filterValue->getMatchMode()->value,
-                'matchModeLabel' => $filterValue->getMatchMode()->label(),
+                'matchMode' => $filterValue->getMatchMode()->key(),
                 'value' => $filterValue->getValue(),
-                'displayValue' => $this->formatDisplayValue($filter, $filterValue),
             ];
         }
 
         return $active;
-    }
-
-    /**
-     * Formatiert einen Wert für die Anzeige.
-     */
-    protected function formatDisplayValue(FilterContract $filter, FilterValue $filterValue): string
-    {
-        $value = $filterValue->getValue();
-        $type = $filter->toDefinition()->type;
-
-        // Für Select-Filter: Labels statt Werte anzeigen
-        if (in_array($type, [FilterTypeEnum::SELECT, FilterTypeEnum::MULTI_SELECT], true)) {
-            $options = $filter->getOptions();
-
-            if (is_array($value)) {
-                return implode(', ', array_map(fn ($v) => $options[$v] ?? $v, $value));
-            }
-
-            return $options[$value] ?? $value;
-        }
-
-        // Für Range-Filter
-        if (is_array($value) && isset($value['from'], $value['to'])) {
-            return "{$value['from']} - {$value['to']}";
-        }
-
-        // Für Boolean
-        if ($type === FilterTypeEnum::BOOLEAN) {
-            return $value ? $filter->getTrueLabel() : $filter->getFalseLabel();
-        }
-
-        return (string) $value;
     }
 }
 ```
@@ -316,9 +216,8 @@ packages/filter-blade/
 
 namespace Ameax\FilterBlade\Components;
 
-use Ameax\Filter\Contracts\FilterSetContract;
-use Ameax\Filter\Presenters\FilterPresenter;
-use Ameax\Filter\Selections\Selection;
+use Ameax\FilterCore\Presenters\FilterPresenter;
+use Ameax\FilterCore\Selections\FilterSelection;
 use Illuminate\View\Component;
 
 class FilterPanel extends Component
@@ -326,12 +225,12 @@ class FilterPanel extends Component
     public array $filterData;
 
     public function __construct(
-        public FilterSetContract $filterSet,
-        public ?Selection $selection = null,
+        public array $filters,
+        public ?FilterSelection $selection = null,
         public string $action = '',
         public string $method = 'GET',
     ) {
-        $presenter = new FilterPresenter($filterSet, $selection);
+        $presenter = new FilterPresenter($filters, $selection);
         $this->filterData = $presenter->toArray();
     }
 
@@ -390,14 +289,7 @@ class FilterPanel extends Component
             @case('select')
                 <x-filter-blade::filters.select :filter="$filter" />
                 @break
-            @case('multi_select')
-                <x-filter-blade::filters.multi-select :filter="$filter" />
-                @break
-            @case('date_range')
-                <x-filter-blade::filters.date-range :filter="$filter" />
-                @break
-            @case('number')
-            @case('number_range')
+            @case('integer')
                 <x-filter-blade::filters.number :filter="$filter" />
                 @break
             @case('text')
@@ -422,8 +314,8 @@ class FilterPanel extends Component
     @if(count($filter['allowedMatchModes']) > 1)
         <select name="filters[{{ $filter['key'] }}][mode]" class="filter-select__mode">
             @foreach($filter['allowedMatchModes'] as $mode)
-                <option value="{{ $mode['value'] }}"
-                        @selected($mode['value'] === $filter['currentMatchMode'])>
+                <option value="{{ $mode['key'] }}"
+                        @selected($mode['key'] === $filter['currentMatchMode'])>
                     {{ $mode['label'] }}
                 </option>
             @endforeach
@@ -435,36 +327,16 @@ class FilterPanel extends Component
     @endif
 
     {{-- Wert-Auswahl --}}
-    @if($filter['config']['searchable'] && $filter['config']['searchUrl'])
-        {{-- Remote Search --}}
-        <div x-data="remoteSelect('{{ $filter['config']['searchUrl'] }}')"
-             class="filter-select__searchable">
-            <input type="text"
-                   x-model="search"
-                   @input.debounce.300ms="fetchOptions()"
-                   placeholder="{{ __('filter.search') }}..."
-                   class="filter-select__search">
-            <select name="filters[{{ $filter['key'] }}][value]"
-                    class="filter-select__value">
-                <option value="">{{ __('filter.select_option') }}</option>
-                <template x-for="option in options" :key="option.value">
-                    <option :value="option.value" x-text="option.label"></option>
-                </template>
-            </select>
-        </div>
-    @else
-        {{-- Statische Options --}}
-        <select name="filters[{{ $filter['key'] }}][value]"
-                class="filter-select__value">
-            <option value="">{{ __('filter.select_option') }}</option>
-            @foreach($filter['options'] as $option)
-                <option value="{{ $option['value'] }}"
-                        @selected($option['value'] == $filter['currentValue'])>
-                    {{ $option['label'] }}
-                </option>
-            @endforeach
-        </select>
-    @endif
+    <select name="filters[{{ $filter['key'] }}][value]"
+            class="filter-select__value">
+        <option value="">{{ __('filter.select_option') }}</option>
+        @foreach($filter['options'] as $option)
+            <option value="{{ $option['value'] }}"
+                    @selected($option['value'] == $filter['currentValue'])>
+                {{ $option['label'] }}
+            </option>
+        @endforeach
+    </select>
 </div>
 ```
 
@@ -473,7 +345,7 @@ class FilterPanel extends Component
 ```blade
 {{-- In einer View --}}
 <x-filter-blade::filter-panel
-    :filter-set="$filterSet"
+    :filters="$filters"
     :selection="$selection"
     action="{{ route('users.index') }}"
 />
@@ -519,11 +391,10 @@ packages/filter-livewire/
 
 namespace Ameax\FilterLivewire\Traits;
 
-use Ameax\Filter\Contracts\FilterSetContract;
-use Ameax\Filter\Data\FilterValue;
-use Ameax\Filter\Enums\MatchModeEnum;
-use Ameax\Filter\Presenters\FilterPresenter;
-use Ameax\Filter\Selections\Selection;
+use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\MatchModes\MatchMode;
+use Ameax\FilterCore\Presenters\FilterPresenter;
+use Ameax\FilterCore\Selections\FilterSelection;
 use Livewire\Attributes\Url;
 
 trait WithFilters
@@ -531,11 +402,9 @@ trait WithFilters
     #[Url]
     public array $filters = [];
 
-    public ?string $activeSelectionId = null;
+    protected ?FilterSelection $selection = null;
 
-    protected ?Selection $selection = null;
-
-    abstract protected function getFilterSet(): FilterSetContract;
+    abstract protected function getAvailableFilters(): array;
 
     public function mountWithFilters(): void
     {
@@ -569,54 +438,27 @@ trait WithFilters
     public function resetFilters(): void
     {
         $this->filters = [];
-        $this->activeSelectionId = null;
         $this->selection = null;
         $this->resetPage();
     }
 
-    public function loadSelection(string $selectionId): void
-    {
-        $repository = app(\Ameax\Filter\Selections\SelectionRepository::class);
-        $this->selection = $repository->find($selectionId);
-
-        if ($this->selection) {
-            $this->activeSelectionId = $selectionId;
-            $this->filters = $this->selectionToFilters($this->selection);
-        }
-    }
-
     protected function buildSelection(): void
     {
-        $this->selection = Selection::make();
+        $this->selection = FilterSelection::make();
 
         foreach ($this->filters as $key => $data) {
             if (empty($data['value'])) {
                 continue;
             }
 
-            $matchMode = MatchModeEnum::tryFrom($data['mode'] ?? 'is');
-
-            if ($matchMode) {
+            if (MatchMode::has($data['mode'] ?? 'is')) {
+                $matchMode = MatchMode::get($data['mode'] ?? 'is');
                 $this->selection->add(FilterValue::make($key, $matchMode, $data['value']));
             }
         }
     }
 
-    protected function selectionToFilters(Selection $selection): array
-    {
-        $filters = [];
-
-        foreach ($selection->getFilterValues() as $filterValue) {
-            $filters[$filterValue->getFilterKey()] = [
-                'mode' => $filterValue->getMatchMode()->value,
-                'value' => $filterValue->getValue(),
-            ];
-        }
-
-        return $filters;
-    }
-
-    protected function getSelection(): Selection
+    protected function getSelection(): FilterSelection
     {
         if ($this->selection === null) {
             $this->buildSelection();
@@ -627,7 +469,7 @@ trait WithFilters
 
     public function getFilterPresenterProperty(): FilterPresenter
     {
-        return new FilterPresenter($this->getFilterSet(), $this->getSelection());
+        return new FilterPresenter($this->getAvailableFilters(), $this->getSelection());
     }
 }
 ```
@@ -639,10 +481,10 @@ trait WithFilters
 
 namespace Ameax\FilterLivewire\Livewire;
 
-use Ameax\Filter\Contracts\FilterSetContract;
-use Ameax\Filter\Presenters\FilterPresenter;
-use Ameax\Filter\Selections\Selection;
-use Ameax\Filter\Selections\SelectionRepository;
+use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\MatchModes\MatchMode;
+use Ameax\FilterCore\Presenters\FilterPresenter;
+use Ameax\FilterCore\Selections\FilterSelection;
 use Livewire\Component;
 use Livewire\Attributes\Reactive;
 
@@ -651,44 +493,25 @@ class FilterPanel extends Component
     #[Reactive]
     public array $filters = [];
 
-    public string $filterSetClass;
+    public array $availableFilters = [];
     public bool $showSaveButton = true;
-    public bool $showSelectionDropdown = true;
 
     // Für Save-Modal
     public bool $showSaveModal = false;
     public string $selectionName = '';
     public string $selectionDescription = '';
 
-    protected FilterSetContract $filterSet;
-
-    public function mount(string $filterSetClass): void
+    public function mount(array $availableFilters): void
     {
-        $this->filterSetClass = $filterSetClass;
-        $this->filterSet = app($filterSetClass);
-    }
-
-    public function getFilterSetProperty(): FilterSetContract
-    {
-        return app($this->filterSetClass);
+        $this->availableFilters = $availableFilters;
     }
 
     public function getPresenterProperty(): array
     {
         $selection = $this->buildSelection();
-        $presenter = new FilterPresenter($this->filterSet, $selection);
+        $presenter = new FilterPresenter($this->availableFilters, $selection);
 
         return $presenter->toArray();
-    }
-
-    public function getSavedSelectionsProperty(): array
-    {
-        $repository = app(SelectionRepository::class);
-
-        return $repository->getForFilterSet(
-            $this->filterSetClass,
-            auth()->user()
-        )->toArray();
     }
 
     public function updateFilter(string $key, string $mode, mixed $value): void
@@ -713,44 +536,18 @@ class FilterPanel extends Component
         $this->dispatch('filtersUpdated', $this->filters);
     }
 
-    public function openSaveModal(): void
+    protected function buildSelection(): FilterSelection
     {
-        $this->showSaveModal = true;
-    }
-
-    public function saveSelection(): void
-    {
-        $this->validate([
-            'selectionName' => 'required|string|max:255',
-        ]);
-
-        $selection = $this->buildSelection();
-        $selection->name($this->selectionName);
-        $selection->description($this->selectionDescription);
-
-        $repository = app(SelectionRepository::class);
-        $repository->save($selection, $this->filterSetClass, auth()->user());
-
-        $this->showSaveModal = false;
-        $this->selectionName = '';
-        $this->selectionDescription = '';
-
-        $this->dispatch('selectionSaved');
-    }
-
-    protected function buildSelection(): Selection
-    {
-        $selection = Selection::make();
+        $selection = FilterSelection::make();
 
         foreach ($this->filters as $key => $data) {
             if (empty($data['value'])) {
                 continue;
             }
 
-            $matchMode = \Ameax\Filter\Enums\MatchModeEnum::tryFrom($data['mode'] ?? 'is');
-
-            if ($matchMode) {
-                $selection->add(\Ameax\Filter\Data\FilterValue::make($key, $matchMode, $data['value']));
+            if (MatchMode::has($data['mode'] ?? 'is')) {
+                $matchMode = MatchMode::get($data['mode'] ?? 'is');
+                $selection->add(FilterValue::make($key, $matchMode, $data['value']));
             }
         }
 
@@ -769,22 +566,6 @@ class FilterPanel extends Component
 ```blade
 {{-- resources/views/livewire/filter-panel.blade.php --}}
 <div class="filter-panel">
-    {{-- Gespeicherte Selektionen --}}
-    @if($showSelectionDropdown && count($this->savedSelections) > 0)
-        <flux:dropdown>
-            <flux:button icon="bookmark">
-                {{ __('filter.saved_selections') }}
-            </flux:button>
-            <flux:menu>
-                @foreach($this->savedSelections as $selection)
-                    <flux:menu.item wire:click="$parent.loadSelection('{{ $selection['id'] }}')">
-                        {{ $selection['name'] }}
-                    </flux:menu.item>
-                @endforeach
-            </flux:menu>
-        </flux:dropdown>
-    @endif
-
     {{-- Filter-Liste --}}
     <div class="filter-panel__filters space-y-4">
         @foreach($this->presenter['filters'] as $key => $filter)
@@ -804,7 +585,7 @@ class FilterPanel extends Component
             <div class="flex flex-wrap gap-2">
                 @foreach($this->presenter['activeFilters'] as $active)
                     <flux:badge dismissible wire:click="removeFilter('{{ $active['key'] }}')">
-                        {{ $active['label'] }}: {{ $active['displayValue'] }}
+                        {{ $active['key'] }}: {{ $active['value'] }}
                     </flux:badge>
                 @endforeach
             </div>
@@ -823,36 +604,6 @@ class FilterPanel extends Component
             </flux:button>
         @endif
     </div>
-
-    {{-- Save Modal --}}
-    <flux:modal wire:model="showSaveModal">
-        <flux:modal.header>
-            {{ __('filter.save_selection') }}
-        </flux:modal.header>
-
-        <div class="space-y-4">
-            <flux:input
-                wire:model="selectionName"
-                label="{{ __('filter.selection_name') }}"
-                placeholder="{{ __('filter.selection_name_placeholder') }}"
-            />
-
-            <flux:textarea
-                wire:model="selectionDescription"
-                label="{{ __('filter.selection_description') }}"
-                rows="2"
-            />
-        </div>
-
-        <flux:modal.footer>
-            <flux:button wire:click="$set('showSaveModal', false)" variant="ghost">
-                {{ __('filter.cancel') }}
-            </flux:button>
-            <flux:button wire:click="saveSelection" variant="primary">
-                {{ __('filter.save') }}
-            </flux:button>
-        </flux:modal.footer>
-    </flux:modal>
 </div>
 ```
 
@@ -864,7 +615,8 @@ class FilterPanel extends Component
 namespace App\Livewire;
 
 use Ameax\FilterLivewire\Traits\WithFilters;
-use App\Filters\UserFilterSet;
+use App\Filters\UserStatusFilter;
+use App\Filters\UserNameFilter;
 use App\Models\User;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -873,9 +625,12 @@ class UserTable extends Component
 {
     use WithPagination, WithFilters;
 
-    protected function getFilterSet(): FilterSetContract
+    protected function getAvailableFilters(): array
     {
-        return app(UserFilterSet::class);
+        return [
+            UserStatusFilter::class,
+            UserNameFilter::class,
+        ];
     }
 
     public function render()
@@ -883,11 +638,8 @@ class UserTable extends Component
         $query = User::query();
 
         // Filter anwenden
-        if (!$this->getSelection()->isEmpty()) {
-            $query = $this->getFilterSet()
-                ->applyTo($query)
-                ->apply($this->getSelection())
-                ->get();
+        if ($this->getSelection()->hasFilters()) {
+            $query->applySelection($this->getSelection());
         }
 
         return view('livewire.user-table', [
@@ -905,7 +657,7 @@ class UserTable extends Component
         {{-- Filter-Panel --}}
         <div class="w-64 shrink-0">
             <livewire:filter-livewire::filter-panel
-                :filter-set-class="App\Filters\UserFilterSet::class"
+                :available-filters="$this->getAvailableFilters()"
                 :filters="$filters"
                 @filtersUpdated="$refresh"
             />
@@ -953,26 +705,13 @@ packages/filter-filament/
 
 namespace Ameax\FilterFilament\Concerns;
 
-use Ameax\Filter\Contracts\FilterSetContract;
-use Ameax\Filter\Data\FilterValue;
-use Ameax\Filter\Enums\MatchModeEnum;
-use Ameax\Filter\Selections\Selection;
+use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\MatchModes\MatchMode;
 use Filament\Tables\Filters\Filter;
 
 trait HasAdvancedFilters
 {
-    protected static ?FilterSetContract $filterSet = null;
-
-    abstract protected static function getFilterSetClass(): string;
-
-    public static function getFilterSet(): FilterSetContract
-    {
-        if (static::$filterSet === null) {
-            static::$filterSet = app(static::getFilterSetClass());
-        }
-
-        return static::$filterSet;
-    }
+    abstract protected static function getFilterClasses(): array;
 
     /**
      * Konvertiert Filter-Core Filter zu Filament-Filtern.
@@ -980,81 +719,65 @@ trait HasAdvancedFilters
     public static function getAdvancedFilters(): array
     {
         $filters = [];
-        $filterSet = static::getFilterSet();
 
-        foreach ($filterSet->getFilters() as $key => $filter) {
+        foreach (static::getFilterClasses() as $filterClass) {
+            $filter = new $filterClass();
             $filters[] = static::convertToFilamentFilter($filter);
         }
 
         return $filters;
     }
 
-    protected static function convertToFilamentFilter(\Ameax\Filter\Contracts\FilterContract $filter): Filter
+    protected static function convertToFilamentFilter($filter): Filter
     {
-        $definition = $filter->toDefinition();
-
-        return Filter::make($definition->key)
-            ->label($definition->label)
+        return Filter::make($filter::key())
+            ->label($filter->label())
             ->form(static::buildFilterForm($filter))
-            ->query(function ($query, array $data) use ($filter, $definition) {
+            ->query(function ($query, array $data) use ($filter) {
                 if (empty($data['value'])) {
                     return $query;
                 }
 
-                $matchMode = MatchModeEnum::tryFrom($data['mode'] ?? $definition->defaultMatchMode->value);
-                $filterValue = FilterValue::make($definition->key, $matchMode, $data['value']);
+                $matchMode = MatchMode::get($data['mode'] ?? $filter->defaultMode()->key());
+                $filterValue = FilterValue::make($filter::key(), $matchMode, $data['value']);
 
-                $applicator = \Ameax\Filter\Query\QueryApplicator::for($query)
-                    ->withFilters([$filter]);
-
-                return $applicator->applyFilter($filterValue)->get();
+                return $query->applyFilter($filterValue);
             })
             ->indicateUsing(function (array $data) use ($filter): ?string {
                 if (empty($data['value'])) {
                     return null;
                 }
 
-                return $filter->getLabel() . ': ' . static::formatIndicator($filter, $data);
+                return $filter->label() . ': ' . $data['value'];
             });
     }
 
-    protected static function buildFilterForm(\Ameax\Filter\Contracts\FilterContract $filter): array
+    protected static function buildFilterForm($filter): array
     {
-        $definition = $filter->toDefinition();
         $components = [];
 
         // Match-Mode Select (wenn mehrere erlaubt)
-        if (count($definition->allowedMatchModes) > 1) {
+        $allowedModes = $filter->allowedModes();
+        if (count($allowedModes) > 1) {
             $components[] = \Filament\Forms\Components\Select::make('mode')
                 ->label(__('filter.match_mode'))
-                ->options(collect($definition->allowedMatchModes)
-                    ->mapWithKeys(fn ($mode) => [$mode->value => $mode->label()])
+                ->options(collect($allowedModes)
+                    ->mapWithKeys(fn ($mode) => [$mode->key() => $mode->label()])
                     ->toArray())
-                ->default($definition->defaultMatchMode->value);
+                ->default($filter->defaultMode()->key());
         }
 
         // Wert-Eingabe basierend auf Typ
-        $components[] = match ($definition->type) {
-            \Ameax\Filter\Enums\FilterTypeEnum::SELECT => \Filament\Forms\Components\Select::make('value')
+        $components[] = match ($filter->type()->value) {
+            'select' => \Filament\Forms\Components\Select::make('value')
                 ->label(__('filter.value'))
-                ->options($filter->getOptions())
-                ->searchable($filter->isSearchable() ?? false),
+                ->options($filter->options()),
 
-            \Ameax\Filter\Enums\FilterTypeEnum::MULTI_SELECT => \Filament\Forms\Components\Select::make('value')
-                ->label(__('filter.value'))
-                ->options($filter->getOptions())
-                ->multiple()
-                ->searchable($filter->isSearchable() ?? false),
-
-            \Ameax\Filter\Enums\FilterTypeEnum::DATE_RANGE => \Filament\Forms\Components\DatePicker::make('value')
-                ->label(__('filter.value')),
-
-            \Ameax\Filter\Enums\FilterTypeEnum::NUMBER,
-            \Ameax\Filter\Enums\FilterTypeEnum::NUMBER_RANGE => \Filament\Forms\Components\TextInput::make('value')
+            'integer' => \Filament\Forms\Components\TextInput::make('value')
                 ->label(__('filter.value'))
                 ->numeric(),
 
-            \Ameax\Filter\Enums\FilterTypeEnum::BOOLEAN => \Filament\Forms\Components\Toggle::make('value')
+            'boolean' => \Filament\Forms\Components\Toggle::make('value')
                 ->label(__('filter.value')),
 
             default => \Filament\Forms\Components\TextInput::make('value')
@@ -1062,22 +785,6 @@ trait HasAdvancedFilters
         };
 
         return $components;
-    }
-
-    protected static function formatIndicator(\Ameax\Filter\Contracts\FilterContract $filter, array $data): string
-    {
-        $value = $data['value'];
-
-        if (is_array($value)) {
-            $options = $filter->getOptions();
-            return implode(', ', array_map(fn ($v) => $options[$v] ?? $v, $value));
-        }
-
-        if (method_exists($filter, 'getOptions') && !empty($filter->getOptions())) {
-            return $filter->getOptions()[$value] ?? $value;
-        }
-
-        return (string) $value;
     }
 }
 ```
@@ -1090,7 +797,8 @@ trait HasAdvancedFilters
 namespace App\Filament\Resources;
 
 use Ameax\FilterFilament\Concerns\HasAdvancedFilters;
-use App\Filters\UserFilterSet;
+use App\Filters\UserStatusFilter;
+use App\Filters\UserNameFilter;
 use Filament\Resources\Resource;
 
 class UserResource extends Resource
@@ -1099,9 +807,12 @@ class UserResource extends Resource
 
     protected static ?string $model = User::class;
 
-    protected static function getFilterSetClass(): string
+    protected static function getFilterClasses(): array
     {
-        return UserFilterSet::class;
+        return [
+            UserStatusFilter::class,
+            UserNameFilter::class,
+        ];
     }
 
     public static function table(Table $table): Table

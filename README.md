@@ -9,16 +9,15 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 
 ## Features
 
-- **Multiple Filter Types**: Boolean, Integer, Text, Select filters
-- **Rich Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GREATER_THAN, LESS_THAN, BETWEEN, EMPTY, NOT_EMPTY
+- **4 Filter Types**: Boolean, Integer, Text, Select filters
+- **17 Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GT, LT, BETWEEN, REGEX, EMPTY, and more
+- **AND/OR Logic**: Complex nested filter groups with FilterSelection
 - **Relation Filtering**: Filter through Eloquent relationships with `whereHas()`
 - **Collection Filtering**: Apply the same filter logic to in-memory Collections
 - **Value Sanitization**: Automatic conversion of input values (e.g., `"true"` → `true`)
 - **Value Validation**: Laravel validation rules with descriptive error messages
-- **Type-Safe Values**: Strict typing with `typedValue()` methods
-- **Filter Selections**: Group and persist filter configurations as JSON
 - **Dynamic Filters**: Create filters at runtime without class definitions
-- **Fluent API**: Clean, chainable syntax for building filters
+- **JSON Serialization**: Persist and restore filter configurations
 
 ## Installation
 
@@ -28,7 +27,7 @@ composer require ameax/filter-core
 
 ## Quick Start
 
-### 1. Create a Filter Class
+### 1. Create a Filter
 
 ```php
 use Ameax\FilterCore\Filters\SelectFilter;
@@ -51,7 +50,7 @@ class StatusFilter extends SelectFilter
 }
 ```
 
-### 2. Add the Filterable Trait to Your Model
+### 2. Add Filterable Trait to Model
 
 ```php
 use Ameax\FilterCore\Concerns\Filterable;
@@ -60,10 +59,11 @@ class User extends Model
 {
     use Filterable;
 
-    protected function filterResolver(): array
+    protected static function filterResolver(): \Closure
     {
-        return [
+        return fn () => [
             StatusFilter::class,
+            CountFilter::class,
         ];
     }
 }
@@ -72,333 +72,139 @@ class User extends Model
 ### 3. Apply Filters
 
 ```php
+use Ameax\FilterCore\Data\FilterValue;
+
 // Simple filter
 $users = User::query()
-    ->applyFilter(StatusFilter::value()->is('active'))
+    ->applyFilter(FilterValue::for(StatusFilter::class)->is('active'))
     ->get();
 
-// Multiple filters
+// Multiple filters with AND
 $users = User::query()
     ->applyFilters([
-        StatusFilter::value()->any(['active', 'pending']),
-        AgeFilter::value()->greaterThan(18),
+        FilterValue::for(StatusFilter::class)->any(['active', 'pending']),
+        FilterValue::for(CountFilter::class)->gt(10),
     ])
     ->get();
 ```
 
-## Filter Types
-
-### BooleanFilter
+### 4. Use Filter Selections for Complex Logic
 
 ```php
-class IsActiveFilter extends BooleanFilter
-{
-    public function column(): string
-    {
-        return 'is_active';
-    }
-}
-
-// Usage
-IsActiveFilter::value()->is(true);
-```
-
-**Sanitization**: Converts `"true"`, `"1"`, `"yes"`, `"on"` to `true`; `"false"`, `"0"`, `"no"`, `"off"` to `false`.
-
-### IntegerFilter
-
-```php
-class AgeFilter extends IntegerFilter
-{
-    public function column(): string
-    {
-        return 'age';
-    }
-}
-
-// Usage
-AgeFilter::value()->is(25);
-AgeFilter::value()->greaterThan(18);
-AgeFilter::value()->between(18, 65);
-```
-
-**Match Modes**: IS, IS_NOT, GREATER_THAN, LESS_THAN, BETWEEN
-
-### TextFilter
-
-```php
-class NameFilter extends TextFilter
-{
-    public function column(): string
-    {
-        return 'name';
-    }
-}
-
-// Usage
-NameFilter::value()->contains('John');
-NameFilter::value()->is('John Doe');
-```
-
-**Match Modes**: CONTAINS, IS, IS_NOT
-
-### SelectFilter
-
-```php
-class StatusFilter extends SelectFilter
-{
-    public function column(): string
-    {
-        return 'status';
-    }
-
-    public function options(): array
-    {
-        return [
-            'active' => 'Active',
-            'inactive' => 'Inactive',
-        ];
-    }
-}
-
-// Usage
-StatusFilter::value()->is('active');
-StatusFilter::value()->any(['active', 'pending']);
-StatusFilter::value()->none(['inactive']);
-```
-
-**Match Modes**: IS, IS_NOT, ANY, NONE
-
-## Relation Filters
-
-Filter through Eloquent relationships:
-
-```php
-class CompanyNameFilter extends TextFilter
-{
-    public function column(): string
-    {
-        return 'name';
-    }
-}
-
-// In your model's filterResolver:
-protected function filterResolver(): array
-{
-    return [
-        CompanyNameFilter::via('company'), // Filter users by company.name
-    ];
-}
-
-// Usage - finds users whose company name contains "Acme"
-User::applyFilter(CompanyNameFilter::value()->contains('Acme'))->get();
-```
-
-## Dynamic Filters
-
-Create filters at runtime without class definitions:
-
-```php
-use Ameax\FilterCore\Filters\SelectFilter;
-use Ameax\FilterCore\Filters\IntegerFilter;
-
-$statusFilter = SelectFilter::dynamic('status')
-    ->withColumn('status')
-    ->withLabel('Status')
-    ->withOptions(['active' => 'Active', 'inactive' => 'Inactive']);
-
-$ageFilter = IntegerFilter::dynamic('age')
-    ->withColumn('age')
-    ->withLabel('Age');
-
-$results = QueryApplicator::for(User::query())
-    ->withFilters([$statusFilter, $ageFilter])
-    ->applyFilters([
-        new FilterValue('status', MatchModeEnum::IS, 'active'),
-        new FilterValue('age', MatchModeEnum::GREATER_THAN, 18),
-    ])
-    ->getQuery()
-    ->get();
-```
-
-## Collection Filtering
-
-Apply filters to in-memory Collections with the same logic as query filtering:
-
-```php
-use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Selections\FilterSelection;
+use Ameax\FilterCore\Selections\FilterGroup;
 
-// Get a collection
-$users = User::all();
+// AND logic (default)
+$selection = FilterSelection::make()
+    ->where(StatusFilter::class)->is('active')
+    ->where(CountFilter::class)->gt(10);
 
-// Simple filter via model
-$activeUsers = User::filterCollection($users, [
-    StatusFilter::value()->is('active'),
-]);
-
-// With FilterSelection (supports AND/OR logic)
+// OR logic
 $selection = FilterSelection::makeOr()
     ->where(StatusFilter::class)->is('active')
     ->where(StatusFilter::class)->is('pending');
 
-$filtered = User::filterCollectionWithSelection($users, $selection);
+// Nested: count > 10 AND (status = 'active' OR status = 'pending')
+$selection = FilterSelection::make()
+    ->where(CountFilter::class)->gt(10)
+    ->orWhere(function (FilterGroup $g) {
+        $g->where(StatusFilter::class)->is('active');
+        $g->where(StatusFilter::class)->is('pending');
+    });
 
-// Direct use of CollectionApplicator
-$filtered = CollectionApplicator::for($users)
-    ->withFilters([StatusFilter::class, AgeFilter::class])
-    ->applyFilters([
-        StatusFilter::value()->is('active'),
-        AgeFilter::value()->greaterThan(18),
-    ])
-    ->getCollection();
+$users = User::query()->applySelection($selection)->get();
 ```
 
-Collection filtering produces the same results as query filtering, making it useful for:
-- Filtering already-loaded data without additional database queries
-- Unit testing filter logic
-- Processing data from external sources
+## Documentation
 
-## Filter Selections
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](docs/todos/01-getting-started.md) | Installation and basic setup |
+| [Filter Types](docs/todos/02-filter-types.md) | SelectFilter, IntegerFilter, TextFilter, BooleanFilter |
+| [Match Modes](docs/todos/03-match-modes.md) | All 17 match modes explained |
+| [Filter Selections](docs/todos/04-filter-selections.md) | AND/OR logic with nested groups |
+| [Relation Filters](docs/todos/05-relation-filters.md) | Filter through relationships |
+| [Collection Filtering](docs/todos/06-collection-filtering.md) | In-memory collection filtering |
+| [Dynamic Filters](docs/todos/07-dynamic-filters.md) | Runtime filter creation |
+| [Validation](docs/todos/08-validation-sanitization.md) | Input validation and sanitization |
+| [Advanced Usage](docs/todos/09-advanced-usage.md) | Custom logic and extensibility |
 
-Group filters for persistence and reuse:
+## Quick Reference
+
+### Filter Types
+
+| Type | Use Case | Key Modes |
+|------|----------|-----------|
+| `SelectFilter` | Predefined options | `is`, `any`, `none` |
+| `IntegerFilter` | Numeric values | `gt`, `lt`, `between` |
+| `TextFilter` | Text search | `contains`, `startsWith`, `regex` |
+| `BooleanFilter` | True/False | `is` |
+
+### Match Modes
 
 ```php
-use Ameax\FilterCore\Selections\FilterSelection;
+// Equality
+->is('value')           // = value
+->isNot('value')        // != value
 
-// Create a selection
-$selection = FilterSelection::make('Premium Users')
-    ->description('Active users with high engagement')
-    ->where(StatusFilter::class)->is('active')
-    ->where(AgeFilter::class)->greaterThan(18)
-    ->where(ScoreFilter::class)->between(80, 100);
+// Sets
+->any(['a', 'b'])       // IN (a, b)
+->none(['a', 'b'])      // NOT IN (a, b)
 
-// Apply to query
-$users = User::query()->applyFilters($selection)->get();
+// Comparison
+->gt(10)                // > 10
+->gte(10)               // >= 10
+->lt(100)               // < 100
+->lte(100)              // <= 100
+->between(10, 100)      // BETWEEN 10 AND 100
 
-// Serialize to JSON
+// Text
+->contains('text')      // LIKE %text%
+->startsWith('pre')     // LIKE pre%
+->endsWith('fix')       // LIKE %fix
+->regex('^pattern')     // REGEXP
+
+// Null
+->empty()               // IS NULL
+->notEmpty()            // IS NOT NULL
+```
+
+### Relation Filters
+
+```php
+// In filterResolver
+protected static function filterResolver(): \Closure
+{
+    return fn () => [
+        StatusFilter::class,                    // Direct filter
+        CompanyStatusFilter::via('company'),    // Filter through relation
+    ];
+}
+
+// Usage
+User::query()
+    ->applyFilter(FilterValue::for(CompanyStatusFilter::class)->is('active'))
+    ->get();
+```
+
+### Dynamic Filters
+
+```php
+use Ameax\FilterCore\Filters\SelectFilter;
+
+$filter = SelectFilter::dynamic('status')
+    ->withColumn('status')
+    ->withOptions(['active' => 'Active', 'inactive' => 'Inactive']);
+```
+
+### JSON Serialization
+
+```php
+// Save
 $json = $selection->toJson();
 
-// Restore from JSON
-$restored = FilterSelection::fromJson($json);
-```
-
-## Value Sanitization & Validation
-
-Filters automatically sanitize and validate input values:
-
-### Sanitization
-
-```php
-// BooleanFilter: strings converted to booleans
-$filter->sanitizeValue('true', MatchModeEnum::IS);  // Returns: true
-$filter->sanitizeValue('1', MatchModeEnum::IS);     // Returns: true
-$filter->sanitizeValue('yes', MatchModeEnum::IS);   // Returns: true
-
-// IntegerFilter: strings converted to integers
-$filter->sanitizeValue('123', MatchModeEnum::IS);   // Returns: 123
-
-// IntegerFilter: arrays converted to BetweenValue for BETWEEN mode
-$filter->sanitizeValue(['min' => 5, 'max' => 10], MatchModeEnum::BETWEEN);
-// Returns: BetweenValue(min: 5, max: 10)
-
-// TextFilter: whitespace trimmed
-$filter->sanitizeValue('  hello  ', MatchModeEnum::CONTAINS);  // Returns: 'hello'
-```
-
-### Validation
-
-```php
-use Ameax\FilterCore\Exceptions\FilterValidationException;
-
-try {
-    User::applyFilter(StatusFilter::value()->is('invalid_status'))->get();
-} catch (FilterValidationException $e) {
-    $e->getFilterKey();     // 'StatusFilter'
-    $e->getErrors();        // ['value' => ['The selected value is invalid.']]
-    $e->getFirstErrors();   // ['The selected value is invalid.']
-}
-```
-
-### Custom Validation Rules
-
-Override `validationRules()` in your filter:
-
-```php
-class AgeFilter extends IntegerFilter
-{
-    public function validationRules(MatchModeEnum $mode): array
-    {
-        return [
-            'value' => 'required|numeric|min:0|max:150',
-        ];
-    }
-}
-```
-
-## Type-Safe Values
-
-Use `typedValue()` for strict typing:
-
-```php
-// BooleanFilter: expects bool
-$filter->typedValue(true);    // OK
-$filter->typedValue('yes');   // TypeError!
-
-// IntegerFilter: expects int or BetweenValue
-$filter->typedValue(42);                        // OK
-$filter->typedValue(new BetweenValue(1, 10));   // OK
-$filter->typedValue('42');                      // TypeError!
-```
-
-### BetweenValue DTO
-
-Type-safe representation of range values:
-
-```php
-use Ameax\FilterCore\Data\BetweenValue;
-
-// Create directly
-$between = new BetweenValue(min: 10, max: 100);
-
-// Create from array
-$between = BetweenValue::fromArray(['min' => 10, 'max' => 100]);
-$between = BetweenValue::fromArray([10, 100]);  // Indexed array
-
-// Access values
-$between->min;  // 10
-$between->max;  // 100
-
-// Convert to array
-$between->toArray();  // ['min' => 10, 'max' => 100]
-```
-
-## Custom Filter Logic
-
-Override `apply()` for complex query logic:
-
-```php
-class FullNameFilter extends TextFilter
-{
-    public function column(): string
-    {
-        return 'first_name'; // Not used when apply() is overridden
-    }
-
-    public function apply(Builder|QueryBuilder $query, MatchModeEnum $mode, mixed $value): bool
-    {
-        if ($mode === MatchModeEnum::CONTAINS) {
-            $query->where(function ($q) use ($value) {
-                $q->where('first_name', 'like', "%{$value}%")
-                  ->orWhere('last_name', 'like', "%{$value}%")
-                  ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$value}%"]);
-            });
-            return true; // Custom logic applied
-        }
-
-        return false; // Use default logic
-    }
-}
+// Load
+$selection = FilterSelection::fromJson($json);
 ```
 
 ## Testing

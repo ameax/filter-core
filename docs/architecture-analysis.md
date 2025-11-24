@@ -1,5 +1,7 @@
 # Architecture Analysis & Known Limitations
 
+> **Note:** This document was written during the early development phase. Many references to `MatchModeEnum` are outdated - the enum has been replaced by class-based `MatchMode` implementations using the `MatchModeContract` interface. This document is preserved for historical context and to document the design decisions that led to the current architecture.
+
 This document provides a critical analysis of the filter-core package design, identifying architectural weaknesses, limitations, and potential improvements.
 
 ## Resolved Issues
