@@ -199,15 +199,154 @@ final class QueryApplicator
     /**
      * Apply multiple filter values to the query.
      *
+     * Optimizes relation filters by grouping them and applying
+     * multiple filters on the same relation in a single whereHas().
+     *
      * @param  array<FilterValue>  $filterValues
      */
     public function applyFilters(array $filterValues): self
     {
-        foreach ($filterValues as $filterValue) {
+        // Group filters by relation and mode
+        $grouped = $this->groupFiltersByRelation($filterValues);
+
+        // Apply direct filters (no relation)
+        foreach ($grouped['direct'] as $filterValue) {
             $this->applyFilter($filterValue);
         }
 
+        // Apply grouped relation filters
+        foreach ($grouped['relations'] as $key => $filters) {
+            $this->applyGroupedRelationFilters($filters, $key);
+        }
+
         return $this;
+    }
+
+    /**
+     * Group filter values by relation and mode for optimization.
+     *
+     * @param  array<FilterValue>  $filterValues
+     * @return array{direct: array<FilterValue>, relations: array<string, array<FilterValue>>}
+     */
+    protected function groupFiltersByRelation(array $filterValues): array
+    {
+        $direct = [];
+        $relations = [];
+
+        foreach ($filterValues as $filterValue) {
+            $filterKey = $filterValue->getFilterKey();
+            $filter = $this->filters[$filterKey] ?? null;
+            $relation = $filter?->getRelation();
+
+            if ($filter === null || $relation === null) {
+                // Direct filter (no relation or filter not found)
+                $direct[] = $filterValue;
+            } else {
+                // Group by relation + mode (e.g., "pond:has" or "pond:doesnt_have")
+                $relationMode = $filter->getRelationMode();
+                $groupKey = $relation.':'.$relationMode->value;
+                $relations[$groupKey][] = $filterValue;
+            }
+        }
+
+        return [
+            'direct' => $direct,
+            'relations' => $relations,
+        ];
+    }
+
+    /**
+     * Apply multiple filters on the same relation in a single whereHas().
+     *
+     * @param  array<FilterValue>  $filterValues
+     * @param  string  $groupKey  Format: "relation:mode" (e.g., "pond:has")
+     */
+    protected function applyGroupedRelationFilters(array $filterValues, string $groupKey): void
+    {
+        if (empty($filterValues)) {
+            return;
+        }
+
+        // Parse group key
+        [$relation, $modeValue] = explode(':', $groupKey);
+        $relationMode = RelationModeEnum::from($modeValue);
+
+        // Get first filter to determine relation details
+        $firstFilterKey = $filterValues[0]->getFilterKey();
+        $filter = $this->filters[$firstFilterKey] ?? null;
+
+        if ($filter === null || ! ($this->query instanceof Builder)) {
+            // Fallback to individual application
+            foreach ($filterValues as $filterValue) {
+                $this->applyFilter($filterValue);
+            }
+
+            return;
+        }
+
+        // Apply all filters in a single whereHas/whereDoesntHave
+        $callback = function (Builder $relQuery) use ($filterValues): void {
+            foreach ($filterValues as $filterValue) {
+                $this->applyFilterToRelationQuery($relQuery, $filterValue);
+            }
+        };
+
+        match ($relationMode) {
+            RelationModeEnum::HAS => $this->query->whereHas($relation, $callback),
+            RelationModeEnum::DOESNT_HAVE => $this->query->whereDoesntHave($relation, $callback),
+            RelationModeEnum::HAS_NONE => $this->query->whereDoesntHave($relation),
+        };
+
+        // Track applied filters
+        foreach ($filterValues as $filterValue) {
+            $this->appliedFilters[] = $filterValue;
+        }
+    }
+
+    /**
+     * Apply a single filter to a relation query (used within whereHas callback).
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>  $relQuery
+     */
+    protected function applyFilterToRelationQuery(Builder $relQuery, FilterValue $filterValue): void
+    {
+        $filterKey = $filterValue->getFilterKey();
+        $definition = $this->filterDefinitions[$filterKey] ?? null;
+
+        if ($definition === null) {
+            throw new InvalidArgumentException("Filter '{$filterKey}' is not defined");
+        }
+
+        $matchMode = $filterValue->getMatchMode();
+
+        if (! $definition->isMatchModeAllowed($matchMode)) {
+            throw new InvalidArgumentException(
+                "Match mode '{$matchMode->key()}' is not allowed for filter '{$filterKey}'"
+            );
+        }
+
+        $column = $definition->getColumn();
+        $value = $filterValue->getValue();
+
+        $filter = $this->filters[$filterKey] ?? null;
+
+        if ($filter !== null) {
+            $value = $filter->sanitizeValue($value, $matchMode);
+            $value = $this->applyTypedValue($filter, $filterKey, $value);
+            $this->validateFilterValue($filter, $filterKey, $matchMode, $value);
+        }
+
+        if ($value instanceof BetweenValue) {
+            $value = $value->toArray();
+        }
+
+        // Check if filter has custom apply logic
+        if ($filter !== null && $filter->apply($relQuery, $matchMode, $value)) {
+            // Custom logic was applied
+        } else {
+            // Apply match mode logic
+            $matchMode->apply($relQuery, $column, $value);
+        }
     }
 
     /**

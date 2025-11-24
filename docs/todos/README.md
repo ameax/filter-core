@@ -4,7 +4,7 @@ This directory contains individual TODO items for the filter-core package. Each 
 
 ## Summary
 
-Most critical and high-priority issues have been **resolved**. The remaining items are performance optimizations, developer experience improvements, and advanced features.
+All critical and high-priority issues have been **resolved**. Medium priority performance optimization complete. The remaining items are developer experience improvements and advanced features.
 
 ## Issues by Priority
 
@@ -14,16 +14,15 @@ Most critical and high-priority issues have been **resolved**. The remaining ite
 
 ### Medium Priority
 
-1. **[N+1 Relation Filters](02-n-plus-one-relation-filters.md)** - Multiple relation filters generate separate subqueries
-2. **[Dynamic Filter Serialization](03-dynamic-filter-serialization.md)** - Dynamic filters can't be fully reconstructed from JSON
-3. **[Database Persistence](04-database-persistence.md)** - No built-in model/migration for saving FilterSelections
+1. **[Dynamic Filter Serialization](03-dynamic-filter-serialization.md)** - Dynamic filters can't be fully reconstructed from JSON
+2. **[Database Persistence](04-database-persistence.md)** - No built-in model/migration for saving FilterSelections
 
 ### Low Priority
 
-4. **[Inconsistent Naming](05-inconsistent-naming.md)** - Mixed naming conventions across the codebase
-5. **[Debugging Tools](06-debugging-tools.md)** - Missing SQL preview, explain(), trace capabilities
-6. **[Versioning Serialized Data](07-versioning-serialized-data.md)** - No version field in JSON for migration support
-7. **[Filter Dependencies](08-filter-dependencies.md)** - No dependency/visibility system for complex UIs
+3. **[Inconsistent Naming](05-inconsistent-naming.md)** - Mixed naming conventions across the codebase
+4. **[Debugging Tools](06-debugging-tools.md)** - Missing SQL preview, explain(), trace capabilities
+5. **[Versioning Serialized Data](07-versioning-serialized-data.md)** - No version field in JSON for migration support
+6. **[Filter Dependencies](08-filter-dependencies.md)** - No dependency/visibility system for complex UIs
 
 ## Status Legend
 
