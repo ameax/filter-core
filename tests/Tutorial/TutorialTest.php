@@ -2,7 +2,6 @@
 
 namespace Ameax\FilterCore\Tests\Tutorial;
 
-use Ameax\FilterCore\Tests\TestCase;
 use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
@@ -23,6 +22,7 @@ use Ameax\FilterCore\Tests\Filters\PondCapacityFilter;
 use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
+use Ameax\FilterCore\Tests\TestCase;
 
 /**
  * ============================================================================

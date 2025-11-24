@@ -3,7 +3,6 @@
 namespace Ameax\FilterCore\Tests\Tutorial;
 
 use Ameax\FilterCore\Data\FilterValue;
-use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
 use Ameax\FilterCore\Tests\Filters\KoiNameFilter;
