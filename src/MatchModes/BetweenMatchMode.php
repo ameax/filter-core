@@ -8,6 +8,7 @@ use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Data\BetweenValue;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Collection;
 use InvalidArgumentException;
 
 /**
@@ -42,5 +43,24 @@ class BetweenMatchMode implements MatchModeContract
         }
 
         throw new InvalidArgumentException('Between match mode requires array or BetweenValue');
+    }
+
+    public function applyToCollection(Collection $collection, string $column, mixed $value): Collection
+    {
+        if ($value instanceof BetweenValue) {
+            $min = $value->min;
+            $max = $value->max;
+        } elseif (is_array($value)) {
+            $min = $value['min'] ?? $value[0] ?? null;
+            $max = $value['max'] ?? $value[1] ?? null;
+
+            if ($min === null || $max === null) {
+                throw new InvalidArgumentException('Between match mode requires min and max values');
+            }
+        } else {
+            throw new InvalidArgumentException('Between match mode requires array or BetweenValue');
+        }
+
+        return $collection->whereBetween($column, [$min, $max]);
     }
 }

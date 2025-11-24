@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\MatchModes;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Collection;
 
 /**
  * Any of the values: column IN (values).
@@ -22,5 +23,12 @@ class AnyMatchMode implements MatchModeContract
     {
         $values = is_array($value) ? $value : [$value];
         $query->whereIn($column, $values);
+    }
+
+    public function applyToCollection(Collection $collection, string $column, mixed $value): Collection
+    {
+        $values = is_array($value) ? $value : [$value];
+
+        return $collection->whereIn($column, $values);
     }
 }

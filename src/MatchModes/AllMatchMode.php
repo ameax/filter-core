@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\MatchModes;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
+use Illuminate\Support\Collection;
 
 /**
  * All match: all values must be present.
@@ -40,5 +41,17 @@ class AllMatchMode implements MatchModeContract
         // A single column can't equal multiple values simultaneously
         // Return no results by adding an impossible condition
         $query->whereRaw('1 = 0');
+    }
+
+    public function applyToCollection(Collection $collection, string $column, mixed $value): Collection
+    {
+        $values = is_array($value) ? $value : [$value];
+
+        if (count($values) === 1) {
+            return $collection->where($column, $values[0]);
+        }
+
+        // Multiple values on a regular column is impossible
+        return $collection->filter(fn () => false);
     }
 }

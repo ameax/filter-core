@@ -2,6 +2,7 @@
 
 namespace Ameax\FilterCore\Concerns;
 
+use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\Query\QueryApplicator;
@@ -9,6 +10,7 @@ use Ameax\FilterCore\Selections\FilterSelection;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 
 /**
  * Trait for models that support filtering.
@@ -233,5 +235,83 @@ trait Filterable
             ->applySelection($selection);
 
         return $applicator->getQuery();
+    }
+
+    // ========================================================================
+    // Collection Filtering Methods
+    // ========================================================================
+
+    /**
+     * Filter a collection using the model's defined filters.
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     * @param  array<FilterValue>|FilterSelection  $filters
+     * @return Collection<int|string, mixed>
+     *
+     * @example
+     * $collection = Koi::all();
+     * $filtered = Koi::filterCollection($collection, [
+     *     FilterValue::for(StatusFilter::class)->is('active'),
+     * ]);
+     */
+    public static function filterCollection(Collection $collection, array|FilterSelection $filters): Collection
+    {
+        if ($filters instanceof FilterSelection) {
+            return static::filterCollectionWithSelection($collection, $filters);
+        }
+
+        if (empty($filters)) {
+            return $collection;
+        }
+
+        $applicator = CollectionApplicator::for($collection)
+            ->withFilters(static::getFilters())
+            ->applyFilters($filters);
+
+        return $applicator->getCollection();
+    }
+
+    /**
+     * Filter a collection using a single FilterValue.
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     * @return Collection<int|string, mixed>
+     *
+     * @example
+     * $filtered = Koi::filterCollectionWith($collection,
+     *     FilterValue::for(StatusFilter::class)->is('active')
+     * );
+     */
+    public static function filterCollectionWith(Collection $collection, FilterValue $filterValue): Collection
+    {
+        return static::filterCollection($collection, [$filterValue]);
+    }
+
+    /**
+     * Filter a collection using a FilterSelection.
+     *
+     * This method properly handles nested AND/OR groups.
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     * @return Collection<int|string, mixed>
+     *
+     * @example
+     * $selection = FilterSelection::make()
+     *     ->where(StatusFilter::class)->is('active')
+     *     ->orWhere(fn($g) => $g->where(StatusFilter::class)->is('pending'));
+     *
+     * $filtered = Koi::filterCollectionWithSelection($collection, $selection);
+     */
+    public static function filterCollectionWithSelection(Collection $collection, FilterSelection $selection): Collection
+    {
+        if (! $selection->hasFilters()) {
+            return $collection;
+        }
+
+        $applicator = CollectionApplicator::for($collection)
+            ->withFilters(static::getFilters())
+            ->applySelection($selection);
+
+        return $applicator->getCollection();
     }
 }
