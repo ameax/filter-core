@@ -12,6 +12,7 @@ class FilterCoreServiceProvider extends PackageServiceProvider
         $package
             ->name('filter-core')
             ->hasConfigFile()
-            ->hasTranslations();
+            ->hasTranslations()
+            ->hasMigration('create_filter_presets_table');
     }
 }

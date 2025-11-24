@@ -477,6 +477,151 @@ if ($request->filled('search')) {
 }
 ```
 
+## Database Persistence with FilterPreset
+
+FilterCore includes an optional `FilterPreset` model for persisting filter selections to the database with user ownership and sharing capabilities.
+
+### Publishing the Migration
+
+```bash
+php artisan vendor:publish --tag=filter-core-migrations
+php artisan migrate
+```
+
+### Saving Selections
+
+```php
+use Ameax\FilterCore\Models\FilterPreset;
+
+// Create a selection
+$selection = FilterSelection::make('Active High-Value Users', User::class)
+    ->description('Users with active status and high engagement')
+    ->where(StatusFilter::class)->is('active')
+    ->where(CountFilter::class)->gt(100);
+
+// Save as preset
+$preset = FilterPreset::fromSelection(
+    $selection,
+    null,              // model type (optional - uses selection's model)
+    auth()->id(),      // user_id (optional)
+    false              // is_public (default: false)
+);
+```
+
+### Loading and Executing
+
+```php
+// Find preset
+$preset = FilterPreset::forModel(User::class)
+    ->forUser(auth()->id())
+    ->where('name', 'Active High-Value Users')
+    ->first();
+
+// Convert to selection and execute
+$users = $preset->toSelection()->execute();
+
+// Or use query() for pagination
+$users = $preset->toSelection()->query()->paginate(20);
+```
+
+### Scopes
+
+FilterPreset provides several useful query scopes:
+
+```php
+// By model
+$presets = FilterPreset::forModel(User::class)->get();
+
+// By user
+$presets = FilterPreset::forUser(auth()->id())->get();
+
+// Public presets
+$presets = FilterPreset::public()->get();
+
+// Accessible by user (owned or public)
+$presets = FilterPreset::accessibleBy(auth()->id())->get();
+
+// Combined
+$presets = FilterPreset::forModel(User::class)
+    ->accessibleBy(auth()->id())
+    ->orderBy('name')
+    ->get();
+```
+
+### Complete Workflow Example
+
+```php
+// 1. User creates and saves filter
+public function saveFilter(Request $request)
+{
+    $selection = FilterSelection::make($request->input('name'), User::class)
+        ->description($request->input('description'));
+
+    // Build selection from request
+    if ($request->filled('status')) {
+        $selection->where(StatusFilter::class)->any($request->input('status'));
+    }
+
+    if ($request->filled('min_count')) {
+        $selection->where(CountFilter::class)->gte($request->input('min_count'));
+    }
+
+    // Save preset
+    $preset = FilterPreset::fromSelection(
+        $selection,
+        null,
+        auth()->id(),
+        $request->boolean('is_public')
+    );
+
+    return response()->json([
+        'id' => $preset->id,
+        'message' => 'Filter saved successfully',
+    ]);
+}
+
+// 2. User loads saved filter
+public function loadFilter(int $presetId)
+{
+    $preset = FilterPreset::accessibleBy(auth()->id())
+        ->findOrFail($presetId);
+
+    $users = $preset->toSelection()
+        ->query()
+        ->paginate(20);
+
+    return response()->json([
+        'preset' => [
+            'id' => $preset->id,
+            'name' => $preset->name,
+            'description' => $preset->description,
+        ],
+        'users' => $users,
+    ]);
+}
+
+// 3. List available presets
+public function listPresets()
+{
+    $presets = FilterPreset::forModel(User::class)
+        ->accessibleBy(auth()->id())
+        ->orderBy('name')
+        ->get(['id', 'name', 'description', 'is_public', 'user_id']);
+
+    return response()->json($presets);
+}
+```
+
+### Configuration
+
+You can customize the user model in `config/filter-core.php`:
+
+```php
+return [
+    'user_model' => \App\Models\CustomUser::class,
+];
+```
+
 ## Next Steps
 
 - [Relation Filters](./05-relation-filters.md) - Filter through relationships

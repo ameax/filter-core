@@ -68,9 +68,17 @@ class TestCase extends Orchestra
         // Package migrations (when they exist)
         $packageMigrationPath = __DIR__.'/../database/migrations';
         if (is_dir($packageMigrationPath)) {
-            foreach (glob($packageMigrationPath.'/*.php.stub') as $migrationFile) {
+            // Support both .php and .php.stub files
+            $migrationFiles = array_merge(
+                glob($packageMigrationPath.'/*.php') ?: [],
+                glob($packageMigrationPath.'/*.php.stub') ?: []
+            );
+
+            foreach ($migrationFiles as $migrationFile) {
                 $migration = include $migrationFile;
-                $migration->up();
+                if (is_object($migration) && method_exists($migration, 'up')) {
+                    $migration->up();
+                }
             }
         }
 
