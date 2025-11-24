@@ -17,7 +17,8 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 - **Value Sanitization**: Automatic conversion of input values (e.g., `"true"` → `true`)
 - **Value Validation**: Laravel validation rules with descriptive error messages
 - **Dynamic Filters**: Create filters at runtime without class definitions
-- **JSON Serialization**: Persist and restore filter configurations
+- **JSON Serialization**: Persist and restore filter configurations with optional model binding
+- **Self-Validating & Self-Executing**: Selections can validate and execute themselves
 
 ## Installation
 
@@ -115,19 +116,37 @@ $selection = FilterSelection::make()
 $users = User::query()->applySelection($selection)->get();
 ```
 
+### 5. Serialize and Restore with Model Binding
+
+```php
+// Create selection with model
+$selection = FilterSelection::make('Active Users', User::class)
+    ->where(StatusFilter::class)->is('active')
+    ->where(CountFilter::class)->gt(10);
+
+// Serialize to JSON
+$json = $selection->toJson();
+// {"model": "App\\Models\\User", "filters": [...]}
+
+// Restore and execute directly
+$restored = FilterSelection::fromJson($json);
+$restored->validate();  // Self-validates against User model
+$users = $restored->execute();  // Self-executes on User model
+```
+
 ## Documentation
 
 | Guide | Description |
 |-------|-------------|
-| [Getting Started](docs/todos/01-getting-started.md) | Installation and basic setup |
-| [Filter Types](docs/todos/02-filter-types.md) | SelectFilter, IntegerFilter, TextFilter, BooleanFilter |
-| [Match Modes](docs/todos/03-match-modes.md) | All 17 match modes explained |
-| [Filter Selections](docs/todos/04-filter-selections.md) | AND/OR logic with nested groups |
-| [Relation Filters](docs/todos/05-relation-filters.md) | Filter through relationships |
-| [Collection Filtering](docs/todos/06-collection-filtering.md) | In-memory collection filtering |
-| [Dynamic Filters](docs/todos/07-dynamic-filters.md) | Runtime filter creation |
-| [Validation](docs/todos/08-validation-sanitization.md) | Input validation and sanitization |
-| [Advanced Usage](docs/todos/09-advanced-usage.md) | Custom logic and extensibility |
+| [Getting Started](docs/guides/01-getting-started.md) | Installation and basic setup |
+| [Filter Types](docs/guides/02-filter-types.md) | SelectFilter, IntegerFilter, TextFilter, BooleanFilter |
+| [Match Modes](docs/guides/03-match-modes.md) | All 17 match modes explained |
+| [Filter Selections](docs/guides/04-filter-selections.md) | AND/OR logic with nested groups |
+| [Relation Filters](docs/guides/05-relation-filters.md) | Filter through relationships |
+| [Collection Filtering](docs/guides/06-collection-filtering.md) | In-memory collection filtering |
+| [Dynamic Filters](docs/guides/07-dynamic-filters.md) | Runtime filter creation |
+| [Validation](docs/guides/08-validation-sanitization.md) | Input validation and sanitization |
+| [Advanced Usage](docs/guides/09-advanced-usage.md) | Custom logic and extensibility |
 
 ## Quick Reference
 

@@ -290,4 +290,238 @@ class FilterSelectionTest extends TestCase
         $this->assertCount(1, $result);
         $this->assertEquals('Kohaku', $result->first()->name);
     }
+
+    // ========================================
+    // Model Class Tests
+    // ========================================
+
+    public function test_for_model_sets_model_class(): void
+    {
+        $selection = FilterSelection::make()
+            ->forModel(Koi::class);
+
+        $this->assertTrue($selection->hasModel());
+        $this->assertEquals(Koi::class, $selection->getModelClass());
+    }
+
+    public function test_make_with_model_class(): void
+    {
+        $selection = FilterSelection::make('Test', Koi::class);
+
+        $this->assertTrue($selection->hasModel());
+        $this->assertEquals(Koi::class, $selection->getModelClass());
+    }
+
+    public function test_make_or_with_model_class(): void
+    {
+        $selection = FilterSelection::makeOr('Test', Koi::class);
+
+        $this->assertTrue($selection->hasModel());
+        $this->assertEquals(Koi::class, $selection->getModelClass());
+    }
+
+    public function test_has_model_returns_false_when_not_set(): void
+    {
+        $selection = FilterSelection::make();
+
+        $this->assertFalse($selection->hasModel());
+        $this->assertNull($selection->getModelClass());
+    }
+
+    // ========================================
+    // Model Serialization Tests
+    // ========================================
+
+    public function test_model_included_in_json(): void
+    {
+        $selection = FilterSelection::make('Test')
+            ->forModel(Koi::class)
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $json = $selection->toJson();
+        $data = json_decode($json, true);
+
+        $this->assertEquals(Koi::class, $data['model']);
+    }
+
+    public function test_model_deserialized_from_json(): void
+    {
+        $json = json_encode([
+            'model' => Koi::class,
+            'name' => 'Test Selection',
+            'filters' => [
+                ['filter' => 'KoiStatusFilter', 'mode' => 'is', 'value' => 'active'],
+            ],
+        ]);
+
+        $selection = FilterSelection::fromJson($json);
+
+        $this->assertTrue($selection->hasModel());
+        $this->assertEquals(Koi::class, $selection->getModelClass());
+    }
+
+    public function test_model_round_trip_serialization(): void
+    {
+        $original = FilterSelection::make('Test')
+            ->forModel(Koi::class)
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $json = $original->toJson();
+        $restored = FilterSelection::fromJson($json);
+
+        $this->assertEquals($original->getModelClass(), $restored->getModelClass());
+        $this->assertTrue($restored->hasModel());
+    }
+
+    public function test_legacy_json_without_model_still_works(): void
+    {
+        $json = json_encode([
+            'name' => 'Legacy Selection',
+            'filters' => [
+                ['filter' => 'KoiStatusFilter', 'mode' => 'is', 'value' => 'active'],
+            ],
+        ]);
+
+        $selection = FilterSelection::fromJson($json);
+
+        $this->assertFalse($selection->hasModel());
+        $this->assertNull($selection->getModelClass());
+        $this->assertEquals(1, $selection->count());
+    }
+
+    // ========================================
+    // Self-Validation Tests
+    // ========================================
+
+    public function test_validate_with_valid_filters(): void
+    {
+        $selection = FilterSelection::make()
+            ->forModel(Koi::class)
+            ->where(KoiStatusFilter::class)->is('active')
+            ->where(KoiCountFilter::class)->gt(5);
+
+        $validation = $selection->validate();
+
+        $this->assertTrue($validation['valid']);
+        $this->assertEmpty($validation['unknown']);
+        $this->assertCount(2, $validation['known']);
+    }
+
+    public function test_validate_with_unknown_filter(): void
+    {
+        $json = json_encode([
+            'model' => Koi::class,
+            'filters' => [
+                ['filter' => 'NonExistentFilter', 'mode' => 'is', 'value' => 'test'],
+            ],
+        ]);
+
+        $selection = FilterSelection::fromJson($json);
+        $validation = $selection->validate();
+
+        $this->assertFalse($validation['valid']);
+        $this->assertContains('NonExistentFilter', $validation['unknown']);
+    }
+
+    public function test_validate_throws_without_model(): void
+    {
+        $selection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Cannot validate selection without a model class');
+
+        $selection->validate();
+    }
+
+    // ========================================
+    // Self-Applying Tests
+    // ========================================
+
+    public function test_query_returns_builder(): void
+    {
+        $selection = FilterSelection::make()
+            ->forModel(Koi::class)
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $query = $selection->query();
+
+        $this->assertInstanceOf(\Illuminate\Database\Eloquent\Builder::class, $query);
+    }
+
+    public function test_query_applies_filters(): void
+    {
+        $selection = FilterSelection::make()
+            ->forModel(Koi::class)
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $result = $selection->query()->get();
+
+        $this->assertCount(2, $result);
+        $this->assertTrue($result->every(fn ($koi) => $koi->status === 'active'));
+    }
+
+    public function test_execute_returns_collection(): void
+    {
+        $selection = FilterSelection::make()
+            ->forModel(Koi::class)
+            ->where(KoiStatusFilter::class)->is('active')
+            ->where(KoiCountFilter::class)->gt(5);
+
+        $results = $selection->execute();
+
+        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $results);
+        $this->assertCount(2, $results);
+    }
+
+    public function test_query_throws_without_model(): void
+    {
+        $selection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $this->expectException(\LogicException::class);
+        $this->expectExceptionMessage('Cannot create query without a model class');
+
+        $selection->query();
+    }
+
+    public function test_execute_throws_without_model(): void
+    {
+        $selection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->is('active');
+
+        $this->expectException(\LogicException::class);
+
+        $selection->execute();
+    }
+
+    // ========================================
+    // Complete Workflow Test
+    // ========================================
+
+    public function test_complete_workflow_with_model_serialization(): void
+    {
+        // 1. Create selection with model
+        $selection = FilterSelection::make('Active Kois', Koi::class)
+            ->description('All active kois with high count')
+            ->where(KoiStatusFilter::class)->is('active')
+            ->where(KoiCountFilter::class)->gt(5);
+
+        // 2. Serialize to JSON
+        $json = $selection->toJson();
+
+        // 3. Deserialize (e.g., from database)
+        $loaded = FilterSelection::fromJson($json);
+
+        // 4. Validate automatically
+        $validation = $loaded->validate();
+        $this->assertTrue($validation['valid']);
+
+        // 5. Execute directly without specifying model
+        $results = $loaded->execute();
+
+        $this->assertCount(2, $results);
+        $this->assertTrue($results->every(fn ($koi) => $koi->status === 'active'));
+        $this->assertTrue($results->every(fn ($koi) => $koi->count > 5));
+    }
 }

@@ -270,6 +270,107 @@ $restored = FilterSelection::fromJson($json);
 // Both produce identical query results
 ```
 
+### Model-based Serialization
+
+FilterSelection can optionally include the model class in serialization, enabling self-validation and self-execution:
+
+```php
+// Create selection with model
+$selection = FilterSelection::make('Active Users', User::class)
+    ->where(StatusFilter::class)->is('active')
+    ->where(CountFilter::class)->gt(10);
+
+// Or fluently
+$selection = FilterSelection::make()
+    ->forModel(User::class)
+    ->where(StatusFilter::class)->is('active');
+
+// Model is included in JSON
+$json = $selection->toJson();
+```
+
+**JSON output** (with model):
+
+```json
+{
+  "model": "App\\Models\\User",
+  "name": "Active Users",
+  "filters": [
+    {"filter": "StatusFilter", "mode": "is", "value": "active"},
+    {"filter": "CountFilter", "mode": "gt", "value": 10}
+  ]
+}
+```
+
+#### Self-Validation
+
+Validate the selection without needing to specify the model:
+
+```php
+// Load selection from JSON
+$selection = FilterSelection::fromJson($json);
+
+// Automatically validates against User model
+$validation = $selection->validate();
+// Returns: ['valid' => true, 'unknown' => [], 'known' => ['StatusFilter', 'CountFilter']]
+
+if (!$validation['valid']) {
+    // Handle unknown filters
+    $unknownFilters = $validation['unknown'];
+}
+```
+
+#### Self-Execution
+
+Execute the selection directly without manually applying to a query:
+
+```php
+// Load and execute in one step
+$selection = FilterSelection::fromJson($json);
+
+// Get query builder
+$query = $selection->query();
+$results = $query->paginate(20);
+
+// Or execute directly
+$results = $selection->execute(); // Returns Collection
+```
+
+#### Checking Model
+
+```php
+$selection = FilterSelection::fromJson($json);
+
+if ($selection->hasModel()) {
+    $modelClass = $selection->getModelClass(); // "App\Models\User"
+}
+```
+
+#### Backward Compatibility
+
+The `model` field is **optional** - selections without it work as before:
+
+```php
+// Legacy JSON without model
+$json = '{"filters": [{"filter": "StatusFilter", "mode": "is", "value": "active"}]}';
+
+$selection = FilterSelection::fromJson($json);
+$selection->hasModel(); // false
+
+// Must manually apply to model
+$users = User::query()->applySelection($selection)->get();
+```
+
+Methods that require a model throw clear exceptions:
+
+```php
+$selection = FilterSelection::make()
+    ->where(StatusFilter::class)->is('active');
+
+$selection->validate();  // LogicException: "Cannot validate without model class"
+$selection->execute();   // LogicException: "Cannot create query without model class"
+```
+
 ## Applying Selections
 
 ### Via Model Scope
@@ -310,16 +411,16 @@ $result = User::validateSelection($selection);
 ### Filter Presets
 
 ```php
-// Define presets
+// Define presets with model
 $presets = [
-    'active_users' => FilterSelection::make('Active Users')
+    'active_users' => FilterSelection::make('Active Users', User::class)
         ->where(StatusFilter::class)->is('active'),
 
-    'high_value' => FilterSelection::make('High Value')
+    'high_value' => FilterSelection::make('High Value', User::class)
         ->where(StatusFilter::class)->is('active')
         ->where(CountFilter::class)->gt(100),
 
-    'needs_attention' => FilterSelection::makeOr()
+    'needs_attention' => FilterSelection::makeOr('Needs Attention', User::class)
         ->where(StatusFilter::class)->is('pending')
         ->where(StatusFilter::class)->is('review'),
 ];
@@ -327,9 +428,9 @@ $presets = [
 // Store as JSON in database
 $preset->json_config = $presets['high_value']->toJson();
 
-// Load and apply
+// Load and execute directly (no need to specify model)
 $selection = FilterSelection::fromJson($preset->json_config);
-$users = User::query()->applySelection($selection)->get();
+$users = $selection->execute(); // Automatically applies to User model
 ```
 
 ### API Filter Endpoint
@@ -339,12 +440,21 @@ $users = User::query()->applySelection($selection)->get();
 public function filter(Request $request)
 {
     $selection = FilterSelection::fromArray([
+        'model' => User::class,
         'filters' => $request->input('filters', []),
     ]);
 
-    return User::query()
-        ->applySelection($selection)
-        ->paginate();
+    // Validate filters
+    $validation = $selection->validate();
+    if (!$validation['valid']) {
+        return response()->json([
+            'error' => 'Invalid filters',
+            'unknown' => $validation['unknown'],
+        ], 422);
+    }
+
+    // Execute directly
+    return $selection->query()->paginate();
 }
 ```
 

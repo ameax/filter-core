@@ -29,6 +29,9 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
 
     protected ?string $description = null;
 
+    /** @var class-string|null */
+    protected ?string $modelClass = null;
+
     public function __construct()
     {
         $this->rootGroup = FilterGroup::and();
@@ -36,11 +39,14 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
 
     /**
      * Create a new FilterSelection.
+     *
+     * @param  class-string|null  $modelClass
      */
-    public static function make(?string $name = null): self
+    public static function make(?string $name = null, ?string $modelClass = null): self
     {
         $selection = new self;
         $selection->name = $name;
+        $selection->modelClass = $modelClass;
 
         return $selection;
     }
@@ -68,6 +74,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
         $selection = new self;
         $selection->name = $data['name'] ?? null;
         $selection->description = $data['description'] ?? null;
+        $selection->modelClass = $data['model'] ?? null;
 
         // Support new group-based format
         if (isset($data['group'])) {
@@ -104,6 +111,23 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     public function description(string $description): self
     {
         $this->description = $description;
+
+        return $this;
+    }
+
+    /**
+     * Set the model class this selection applies to.
+     *
+     * @param  class-string  $modelClass
+     *
+     * @example
+     * FilterSelection::make()
+     *     ->forModel(Koi::class)
+     *     ->where(StatusFilter::class)->is('active');
+     */
+    public function forModel(string $modelClass): self
+    {
+        $this->modelClass = $modelClass;
 
         return $this;
     }
@@ -190,16 +214,19 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Create an OR selection (top-level OR instead of AND).
      *
+     * @param  class-string|null  $modelClass
+     *
      * @example
      * $selection = FilterSelection::makeOr()
      *     ->where(StatusFilter::class)->is('active')
      *     ->where(StatusFilter::class)->is('pending');
      * // SQL: status = 'active' OR status = 'pending'
      */
-    public static function makeOr(?string $name = null): self
+    public static function makeOr(?string $name = null, ?string $modelClass = null): self
     {
         $selection = new self;
         $selection->name = $name;
+        $selection->modelClass = $modelClass;
         $selection->rootGroup = FilterGroup::or();
 
         return $selection;
@@ -306,6 +333,24 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
+     * Check if a model class is set.
+     */
+    public function hasModel(): bool
+    {
+        return $this->modelClass !== null;
+    }
+
+    /**
+     * Get the model class this selection applies to.
+     *
+     * @return class-string|null
+     */
+    public function getModelClass(): ?string
+    {
+        return $this->modelClass;
+    }
+
+    /**
      * Check if selection has any filters.
      */
     public function hasFilters(): bool
@@ -358,6 +403,74 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
+     * Validate this selection against its model's filters.
+     *
+     * @return array{valid: bool, unknown: array<string>, known: array<string>}
+     *
+     * @throws \LogicException if no model class is set
+     *
+     * @example
+     * $selection = FilterSelection::fromJson($json);
+     * $validation = $selection->validate();
+     * if (!$validation['valid']) {
+     *     // Handle unknown filters
+     * }
+     */
+    public function validate(): array
+    {
+        if ($this->modelClass === null) {
+            throw new \LogicException('Cannot validate selection without a model class. Use forModel() to set one.');
+        }
+
+        if (! method_exists($this->modelClass, 'validateSelection')) {
+            throw new \LogicException("Model {$this->modelClass} must use the Filterable trait.");
+        }
+
+        return $this->modelClass::validateSelection($this);
+    }
+
+    /**
+     * Get a query builder for this selection.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>
+     *
+     * @throws \LogicException if no model class is set
+     *
+     * @example
+     * $selection = FilterSelection::fromJson($json);
+     * $query = $selection->query();
+     * $results = $query->paginate(20);
+     */
+    public function query(): \Illuminate\Database\Eloquent\Builder
+    {
+        if ($this->modelClass === null) {
+            throw new \LogicException('Cannot create query without a model class. Use forModel() to set one.');
+        }
+
+        if (! method_exists($this->modelClass, 'query')) {
+            throw new \LogicException("Model {$this->modelClass} must be an Eloquent model.");
+        }
+
+        return $this->modelClass::query()->applySelection($this);
+    }
+
+    /**
+     * Execute this selection and return results.
+     *
+     * @return \Illuminate\Support\Collection<int, \Illuminate\Database\Eloquent\Model>
+     *
+     * @throws \LogicException if no model class is set
+     *
+     * @example
+     * $selection = FilterSelection::fromJson($json);
+     * $results = $selection->execute();
+     */
+    public function execute(): \Illuminate\Support\Collection
+    {
+        return $this->query()->get();
+    }
+
+    /**
      * Convert to array.
      *
      * Uses new format with 'group' for complex selections,
@@ -369,19 +482,31 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     {
         // For backward compatibility, use legacy format if possible
         if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND) {
-            return [
+            $data = [
                 'name' => $this->name,
                 'description' => $this->description,
                 'filters' => array_map(fn (FilterValue $fv) => $fv->toArray(), $this->all()),
             ];
+
+            if ($this->modelClass !== null) {
+                $data['model'] = $this->modelClass;
+            }
+
+            return $data;
         }
 
         // Use new group-based format for complex selections
-        return [
+        $data = [
             'name' => $this->name,
             'description' => $this->description,
             'group' => $this->rootGroup->toArray(),
         ];
+
+        if ($this->modelClass !== null) {
+            $data['model'] = $this->modelClass;
+        }
+
+        return $data;
     }
 
     /**
