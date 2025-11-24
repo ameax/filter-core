@@ -37,7 +37,7 @@ Modulares, wiederverwendbares Filter-System für Laravel. Trennt Filter-Logik vo
 │  │                    Query Applicator                       │   │
 │  │                                                           │   │
 │  │  - Eloquent Builder Integration  ✅                       │   │
-│  │  - Collection Filtering (geplant)                         │   │
+│  │  - Collection Filtering  ✅                               │   │
 │  └──────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -84,6 +84,8 @@ src/
 │   ├── RegexMatchMode.php
 │   ├── EmptyMatchMode.php
 │   └── NotEmptyMatchMode.php
+├── Collection/
+│   └── CollectionApplicator.php
 ├── Query/
 │   └── QueryApplicator.php
 └── Selections/
@@ -91,7 +93,7 @@ src/
     ├── FilterGroup.php          # AND/OR Gruppen
     └── FilterGroupBuilder.php   # Fluent API
 
-tests/  → 207 Tests
+tests/  → 263 Tests
 ```
 
 ## Kern-Konzepte
@@ -176,6 +178,38 @@ $selection = FilterSelection::make()
     });
 ```
 
+### 4. Collection Filtering
+
+Filter in-memory Collections mit derselben Logik wie Query-Filtering:
+
+```php
+// Collection laden
+$collection = User::all();
+
+// Einfache Filterung
+$filtered = User::filterCollection($collection, [
+    FilterValue::for(StatusFilter::class)->is('active'),
+]);
+
+// Mit Selection (inkl. OR-Logik)
+$selection = FilterSelection::makeOr()
+    ->where(StatusFilter::class)->is('active')
+    ->where(StatusFilter::class)->is('pending');
+
+$filtered = User::filterCollectionWithSelection($collection, $selection);
+
+// Direkt mit CollectionApplicator
+use Ameax\FilterCore\Collection\CollectionApplicator;
+
+$filtered = CollectionApplicator::for($collection)
+    ->withFilters([StatusFilter::class, CountFilter::class])
+    ->applyFilters([
+        FilterValue::for(StatusFilter::class)->is('active'),
+        FilterValue::for(CountFilter::class)->gte(10),
+    ])
+    ->getCollection();
+```
+
 ## Alle MatchModes
 
 | Key | Beschreibung | Beispiel |
@@ -248,6 +282,7 @@ $selection = FilterSelection::fromJson($json);
 - Filter-Typen: Select, Integer, Text, Boolean
 - 17 MatchModes inkl. regex
 - QueryApplicator mit Eloquent Integration
+- CollectionApplicator für In-Memory Filterung
 - FilterSelection mit OR-Logik
 - Verschachtelte FilterGroups
 - Dynamic Filters
@@ -255,10 +290,9 @@ $selection = FilterSelection::fromJson($json);
 - Relation Filter (via, viaDoesntHave, withoutRelation)
 - JSON-Serialisierung
 - Value Sanitization & Validation
-- 207 Tests
+- 263 Tests
 
 ### Geplant
 
-- Collection Filtering
 - Zusätzliche Filter-Typen (Date, DateTime, Decimal)
 - UI-Packages (separate Repositories)

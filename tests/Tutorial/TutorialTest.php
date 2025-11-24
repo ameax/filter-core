@@ -2,6 +2,7 @@
 
 namespace Ameax\FilterCore\Tests\Tutorial;
 
+use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
@@ -45,6 +46,7 @@ use Ameax\FilterCore\Tests\TestCase;
  * 10. Type-Safe Values - Strict typing with typedValue()
  * 11. Custom Match Modes - Extensibility via MatchModeContract
  * 12. OR Logic & FilterGroups - Complex nested AND/OR conditions
+ * 13. Collection Filtering - Apply filters to in-memory Collections
  *
  * DATA MODEL:
  * - Pond: has water_type (fresh/salt/brackish), capacity, is_heated
@@ -1532,5 +1534,133 @@ class TutorialTest extends TestCase
         // Get all unique filter keys
         $keys = $rootGroup->getAllFilterKeys();
         $this->assertCount(2, $keys); // KoiStatusFilter, KoiCountFilter
+    }
+
+    // ========================================================================
+    // SECTION 13: COLLECTION FILTERING
+    // ========================================================================
+    // Apply filters to in-memory Collections instead of database queries.
+    // Same logic, same results - useful for filtering already-loaded data.
+    // ========================================================================
+
+    /**
+     * Basic collection filtering via model method.
+     *
+     * Use filterCollection() on models with the Filterable trait
+     * to filter already-loaded collections.
+     */
+    public function test_13_1_basic_collection_filtering(): void
+    {
+        // Load all data into memory
+        $collection = Koi::all();
+        $this->assertCount(5, $collection);
+
+        // Filter the collection (same syntax as query filtering)
+        $filtered = Koi::filterCollection($collection, [
+            FilterValue::for(KoiStatusFilter::class)->is('active'),
+        ]);
+
+        $this->assertCount(2, $filtered);
+        $this->assertEquals(['Kohaku', 'Showa'], $filtered->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * Collection filtering with FilterSelection.
+     *
+     * Use filterCollectionWithSelection() for complex filter logic.
+     */
+    public function test_13_2_collection_filtering_with_selection(): void
+    {
+        $collection = Koi::all();
+
+        $selection = FilterSelection::make()
+            ->where(KoiStatusFilter::class)->any(['active', 'pending'])
+            ->where(KoiCountFilter::class)->gte(10);
+
+        $filtered = Koi::filterCollectionWithSelection($collection, $selection);
+
+        // Active/pending with count >= 10: Showa(10), Kohaku(20), Asagi(15)
+        $this->assertCount(3, $filtered);
+        $this->assertEquals(['Asagi', 'Kohaku', 'Showa'], $filtered->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * Collection filtering with OR logic.
+     *
+     * Complex OR conditions work the same as query filtering.
+     */
+    public function test_13_3_collection_filtering_with_or_logic(): void
+    {
+        $collection = Koi::all();
+
+        // (status = active AND count >= 15) OR (status = pending)
+        $selection = FilterSelection::makeOr()
+            ->andWhere(function (FilterGroup $g) {
+                $g->where(KoiStatusFilter::class)->is('active');
+                $g->where(KoiCountFilter::class)->gte(15);
+            })
+            ->andWhere(function (FilterGroup $g) {
+                $g->where(KoiStatusFilter::class)->is('pending');
+            });
+
+        $filtered = Koi::filterCollectionWithSelection($collection, $selection);
+
+        // active AND count >= 15: Kohaku(20)
+        // pending: Asagi, Shusui
+        $this->assertCount(3, $filtered);
+        $this->assertEquals(['Asagi', 'Kohaku', 'Shusui'], $filtered->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * Collection and query filtering produce identical results.
+     *
+     * This is the key guarantee: same filters = same results.
+     */
+    public function test_13_4_collection_matches_query_filtering(): void
+    {
+        $filters = [
+            FilterValue::for(KoiStatusFilter::class)->any(['active', 'pending']),
+            FilterValue::for(KoiCountFilter::class)->gte(10),
+        ];
+
+        // Query filtering (database)
+        $queryResult = Koi::query()
+            ->applyFilters($filters)
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        // Collection filtering (in-memory)
+        $collectionResult = Koi::filterCollection(Koi::all(), $filters)
+            ->pluck('name')
+            ->sort()
+            ->values()
+            ->all();
+
+        // Results must be identical
+        $this->assertEquals($queryResult, $collectionResult);
+    }
+
+    /**
+     * Direct use of CollectionApplicator.
+     *
+     * For more control, use CollectionApplicator directly.
+     */
+    public function test_13_5_direct_collection_applicator(): void
+    {
+        $collection = Koi::all();
+
+        $filtered = CollectionApplicator::for($collection)
+            ->withFilters([KoiStatusFilter::class, KoiCountFilter::class])
+            ->applyFilters([
+                FilterValue::for(KoiStatusFilter::class)->is('active'),
+                FilterValue::for(KoiCountFilter::class)->between(5, 15),
+            ])
+            ->getCollection();
+
+        // Active with count 5-15: Showa(10)
+        $this->assertCount(1, $filtered);
+        $this->assertEquals('Showa', $filtered->first()->name);
     }
 }

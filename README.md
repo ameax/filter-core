@@ -12,6 +12,7 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 - **Multiple Filter Types**: Boolean, Integer, Text, Select filters
 - **Rich Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GREATER_THAN, LESS_THAN, BETWEEN, EMPTY, NOT_EMPTY
 - **Relation Filtering**: Filter through Eloquent relationships with `whereHas()`
+- **Collection Filtering**: Apply the same filter logic to in-memory Collections
 - **Value Sanitization**: Automatic conversion of input values (e.g., `"true"` → `true`)
 - **Value Validation**: Laravel validation rules with descriptive error messages
 - **Type-Safe Values**: Strict typing with `typedValue()` methods
@@ -219,6 +220,44 @@ $results = QueryApplicator::for(User::query())
     ->getQuery()
     ->get();
 ```
+
+## Collection Filtering
+
+Apply filters to in-memory Collections with the same logic as query filtering:
+
+```php
+use Ameax\FilterCore\Collection\CollectionApplicator;
+use Ameax\FilterCore\Selections\FilterSelection;
+
+// Get a collection
+$users = User::all();
+
+// Simple filter via model
+$activeUsers = User::filterCollection($users, [
+    StatusFilter::value()->is('active'),
+]);
+
+// With FilterSelection (supports AND/OR logic)
+$selection = FilterSelection::makeOr()
+    ->where(StatusFilter::class)->is('active')
+    ->where(StatusFilter::class)->is('pending');
+
+$filtered = User::filterCollectionWithSelection($users, $selection);
+
+// Direct use of CollectionApplicator
+$filtered = CollectionApplicator::for($users)
+    ->withFilters([StatusFilter::class, AgeFilter::class])
+    ->applyFilters([
+        StatusFilter::value()->is('active'),
+        AgeFilter::value()->greaterThan(18),
+    ])
+    ->getCollection();
+```
+
+Collection filtering produces the same results as query filtering, making it useful for:
+- Filtering already-loaded data without additional database queries
+- Unit testing filter logic
+- Processing data from external sources
 
 ## Filter Selections
 
