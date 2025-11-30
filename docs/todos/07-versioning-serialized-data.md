@@ -1,7 +1,26 @@
 # TODO: No Versioning for Serialized Data
 
 **Priority:** Low
-**Status:** Open
+**Status:** Deferred
+
+## Decision
+
+Current JSON format is implicitly "v0" (no version field). Versioning will be added when the schema actually changes:
+
+1. **Now:** No version field = v0
+2. **On first breaking change:** Add `"v": 1` field
+3. **Migration:** Data without `v` field is treated as v0
+
+```php
+// Future implementation when needed:
+$version = $data['v'] ?? 0;  // Missing = legacy v0
+
+if ($version < self::SCHEMA_VERSION) {
+    $data = self::migrateData($data, $version);
+}
+```
+
+This follows YAGNI - no complexity until it's actually needed.
 
 ## Problem
 
