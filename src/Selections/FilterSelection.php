@@ -602,7 +602,6 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * Dump SQL and bindings for debugging.
      *
      * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
-     *
      * @return array{sql: string, sql_with_bindings: string, bindings: array<mixed>, filters: array<string>, explanation: string}
      */
     public function debug(?\Illuminate\Database\Eloquent\Builder $query = null): array

@@ -3,9 +3,9 @@
 namespace Ameax\FilterCore\Tests\Selections;
 
 use Ameax\FilterCore\Selections\FilterSelection;
-use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
 use Ameax\FilterCore\Tests\Filters\KoiNameFilter;
+use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\TestCase;
 
