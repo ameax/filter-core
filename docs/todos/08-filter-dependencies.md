@@ -1,7 +1,10 @@
 # TODO: Filter Dependencies and Conditional Visibility
 
 **Priority:** Low
-**Status:** Open (Future Enhancement)
+**Status:** Deferred (UI Package Scope)
+
+> **Decision:** This is a UI package concern (filter-livewire, filter-blade), not filter-core.
+> Will be implemented when UI packages are developed.
 
 ## Problem
 

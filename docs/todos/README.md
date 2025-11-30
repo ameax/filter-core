@@ -25,13 +25,10 @@ This directory contains individual TODO items for the filter-core package. Each 
 - **[Naming Conventions](05-inconsistent-naming.md)** - Documented in `docs/guides/99-naming-conventions.md`
 - **[Debugging Tools](06-debugging-tools.md)** - `toSql()`, `toSqlWithBindings()`, `explain()`, `debug()`, `dd()` on FilterSelection
 
-### Low Priority
-
-1. **[Filter Dependencies](08-filter-dependencies.md)** - No dependency/visibility system for complex UIs
-
 ### Deferred
 
-1. **[Versioning Serialized Data](07-versioning-serialized-data.md)** - Deferred until schema change occurs. Current format is implicit v0.
+1. **[Versioning Serialized Data](07-versioning-serialized-data.md)** - Until schema change occurs. Current format is implicit v0.
+2. **[Filter Dependencies](08-filter-dependencies.md)** - UI package scope (filter-livewire, filter-blade).
 
 ## Status Legend
 
