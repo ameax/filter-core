@@ -1,10 +1,14 @@
 {
     "name": "ameax/filter-core",
-    "description": "This is my package filter-core",
+    "description": "Type-safe filtering system for Laravel with 6 filter types, 18 match modes, AND/OR logic, relation filtering, and JSON serialization",
     "keywords": [
         "ameax",
         "laravel",
-        "filter-core"
+        "filter",
+        "query-builder",
+        "eloquent",
+        "search",
+        "filtering"
     ],
     "homepage": "https://github.com/ameax/filter-core",
     "license": "MIT",
