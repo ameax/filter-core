@@ -9,21 +9,37 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 
 ## Features
 
-- **4 Filter Types**: Boolean, Integer, Text, Select filters
-- **17 Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GT, LT, BETWEEN, REGEX, EMPTY, and more
+- **6 Filter Types**: Boolean, Integer, Text, Select, Date, Decimal filters
+- **19 Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GT, LT, BETWEEN, REGEX, EMPTY, DATE_RANGE, and more
 - **AND/OR Logic**: Complex nested filter groups with FilterSelection
 - **Relation Filtering**: Filter through Eloquent relationships with `whereHas()`
 - **Collection Filtering**: Apply the same filter logic to in-memory Collections
+- **Date Filtering**: Quick selections, relative ranges, fiscal years, timezone support
+- **Decimal Filtering**: Precision control, stored-as-integer support for prices
+- **Quick Filter Presets**: Database-driven, user-configurable date range presets
 - **Value Sanitization**: Automatic conversion of input values (e.g., `"true"` → `true`)
 - **Value Validation**: Laravel validation rules with descriptive error messages
 - **Dynamic Filters**: Create filters at runtime without class definitions
 - **JSON Serialization**: Persist and restore filter configurations with optional model binding
-- **Self-Validating & Self-Executing**: Selections can validate and execute themselves
+- **Debugging Tools**: SQL preview, bindings interpolation, human-readable explanations
 
 ## Installation
 
 ```bash
 composer require ameax/filter-core
+```
+
+Publish the migrations:
+
+```bash
+php artisan vendor:publish --tag="filter-core-migrations"
+php artisan migrate
+```
+
+Optionally publish the config:
+
+```bash
+php artisan vendor:publish --tag="filter-core-config"
 ```
 
 ## Quick Start
@@ -116,22 +132,29 @@ $selection = FilterSelection::make()
 $users = User::query()->applySelection($selection)->get();
 ```
 
-### 5. Serialize and Restore with Model Binding
+### 5. Debug Your Filters
 
 ```php
-// Create selection with model
-$selection = FilterSelection::make('Active Users', User::class)
+$selection = FilterSelection::make()
+    ->forModel(User::class)
     ->where(StatusFilter::class)->is('active')
     ->where(CountFilter::class)->gt(10);
 
-// Serialize to JSON
-$json = $selection->toJson();
-// {"model": "App\\Models\\User", "filters": [...]}
+// SQL with placeholders
+$selection->toSql();
+// → "select * from `users` where `status` = ? and `count` > ?"
 
-// Restore and execute directly
-$restored = FilterSelection::fromJson($json);
-$restored->validate();  // Self-validates against User model
-$users = $restored->execute();  // Self-executes on User model
+// SQL with values interpolated
+$selection->toSqlWithBindings();
+// → "select * from `users` where `status` = 'active' and `count` > 10"
+
+// Human-readable explanation
+$selection->explain();
+// → "StatusFilter IS 'active' AND CountFilter GT 10"
+
+// Full debug info
+$selection->debug();
+// → ['sql' => ..., 'sql_with_bindings' => ..., 'bindings' => [...], 'filters' => [...], 'explanation' => ...]
 ```
 
 ## Documentation
@@ -139,14 +162,15 @@ $users = $restored->execute();  // Self-executes on User model
 | Guide | Description |
 |-------|-------------|
 | [Getting Started](docs/guides/01-getting-started.md) | Installation and basic setup |
-| [Filter Types](docs/guides/02-filter-types.md) | SelectFilter, IntegerFilter, TextFilter, BooleanFilter |
-| [Match Modes](docs/guides/03-match-modes.md) | All 17 match modes explained |
+| [Filter Types](docs/guides/02-filter-types.md) | All 6 filter types explained |
+| [Match Modes](docs/guides/03-match-modes.md) | All 19 match modes explained |
 | [Filter Selections](docs/guides/04-filter-selections.md) | AND/OR logic with nested groups |
 | [Relation Filters](docs/guides/05-relation-filters.md) | Filter through relationships |
 | [Collection Filtering](docs/guides/06-collection-filtering.md) | In-memory collection filtering |
 | [Dynamic Filters](docs/guides/07-dynamic-filters.md) | Runtime filter creation |
 | [Validation](docs/guides/08-validation-sanitization.md) | Input validation and sanitization |
 | [Advanced Usage](docs/guides/09-advanced-usage.md) | Custom logic and extensibility |
+| [Date Filter](docs/guides/10-date-filter.md) | Date filtering with timezone support |
 
 ## Quick Reference
 
@@ -158,6 +182,88 @@ $users = $restored->execute();  // Self-executes on User model
 | `IntegerFilter` | Numeric values | `gt`, `lt`, `between` |
 | `TextFilter` | Text search | `contains`, `startsWith`, `regex` |
 | `BooleanFilter` | True/False | `is` |
+| `DateFilter` | Date/DateTime columns | `dateRange`, `notInDateRange` |
+| `DecimalFilter` | Decimal/Float values | `gt`, `lt`, `between` |
+
+### Date Filter
+
+```php
+use Ameax\FilterCore\Filters\DateFilter;
+use Ameax\FilterCore\DateRange\DateRangeValue;
+
+// Static filter class
+class CreatedAtFilter extends DateFilter
+{
+    public function column(): string
+    {
+        return 'created_at';
+    }
+
+    // Enable timezone conversion for DATETIME columns
+    public function hasTime(): bool
+    {
+        return true;
+    }
+}
+
+// Dynamic filter
+$filter = DateFilter::dynamic('created_at')
+    ->withColumn('created_at')
+    ->withTime(); // DATETIME with timezone support
+
+// Quick selections
+DateRangeValue::today();
+DateRangeValue::thisWeek();
+DateRangeValue::thisMonth();
+DateRangeValue::thisQuarter();
+DateRangeValue::thisYear();
+
+// Relative ranges
+DateRangeValue::lastDays(30);
+DateRangeValue::nextDays(7);
+DateRangeValue::lastMonths(3);
+
+// Specific periods
+DateRangeValue::quarter(2, yearOffset: 0);  // Q2 this year
+DateRangeValue::month(6, yearOffset: -1);   // June last year
+DateRangeValue::fiscalYear(startMonth: 7);  // July-June fiscal year
+
+// Custom ranges
+DateRangeValue::between('2024-01-01', '2024-12-31');
+DateRangeValue::from('2024-06-01');
+DateRangeValue::until('2024-12-31');
+```
+
+### Decimal Filter
+
+```php
+use Ameax\FilterCore\Filters\DecimalFilter;
+
+// For price columns stored as cents (integer)
+class PriceFilter extends DecimalFilter
+{
+    public function column(): string
+    {
+        return 'price_cents';
+    }
+
+    public function storedAsInteger(): bool
+    {
+        return true; // User enters 19.99, query uses 1999
+    }
+
+    public function precision(): int
+    {
+        return 2;
+    }
+}
+
+// Dynamic filter
+$filter = DecimalFilter::dynamic('price')
+    ->withColumn('price_cents')
+    ->withStoredAsInteger(true)
+    ->withPrecision(2);
+```
 
 ### Match Modes
 
@@ -210,10 +316,25 @@ User::query()
 
 ```php
 use Ameax\FilterCore\Filters\SelectFilter;
+use Ameax\FilterCore\Filters\DateFilter;
+use Ameax\FilterCore\Filters\DecimalFilter;
 
+// Select filter
 $filter = SelectFilter::dynamic('status')
     ->withColumn('status')
     ->withOptions(['active' => 'Active', 'inactive' => 'Inactive']);
+
+// Date filter with timezone
+$filter = DateFilter::dynamic('created_at')
+    ->withColumn('created_at')
+    ->withTime()
+    ->withPastOnly();
+
+// Decimal filter for prices
+$filter = DecimalFilter::dynamic('price')
+    ->withColumn('price_cents')
+    ->withStoredAsInteger(true)
+    ->withPrecision(2);
 ```
 
 ### JSON Serialization
@@ -224,6 +345,29 @@ $json = $selection->toJson();
 
 // Load
 $selection = FilterSelection::fromJson($json);
+
+// With model binding for self-validation and execution
+$selection = FilterSelection::make('Active Users', User::class)
+    ->where(StatusFilter::class)->is('active');
+
+$json = $selection->toJson();
+$restored = FilterSelection::fromJson($json);
+$restored->validate();  // Self-validates against User model
+$users = $restored->execute();  // Self-executes on User model
+```
+
+## Configuration
+
+```php
+// config/filter-core.php
+return [
+    // User model for FilterPreset ownership
+    'user_model' => \App\Models\User::class,
+
+    // Timezone for date/datetime filter queries
+    // When filtering "today" in Europe/Berlin, converts to UTC for DB
+    'timezone' => 'Europe/Berlin',
+];
 ```
 
 ## Testing
