@@ -29,6 +29,12 @@ return new class extends Migration
             // Nullable field for EMPTY/NOT_EMPTY tests
             $table->string('variety')->nullable();
 
+            // DECIMAL: weight in kg (stored as decimal)
+            $table->decimal('weight', 8, 2)->default(0.00);
+
+            // DECIMAL stored as INTEGER: price in cents (1999 = $19.99)
+            $table->integer('price_cents')->default(0);
+
             $table->timestamps();
         });
     }

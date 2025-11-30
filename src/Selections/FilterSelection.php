@@ -524,4 +524,220 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     {
         return $this->toArray();
     }
+
+    // =========================================================================
+    // DEBUGGING TOOLS
+    // =========================================================================
+
+    /**
+     * Get the SQL query string for this selection.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     *
+     * @throws \LogicException if no model class is set and no query provided
+     *
+     * @example
+     * $selection->toSql();
+     * // → "select * from `kois` where `status` = ? and `count` > ?"
+     */
+    public function toSql(?\Illuminate\Database\Eloquent\Builder $query = null): string
+    {
+        $query = $this->resolveQueryForDebug($query);
+
+        return $query->toSql();
+    }
+
+    /**
+     * Get the SQL query string with bindings interpolated.
+     *
+     * Note: This is for debugging only. Never use this for actual queries
+     * as it may be vulnerable to SQL injection.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     *
+     * @throws \LogicException if no model class is set and no query provided
+     *
+     * @example
+     * $selection->toSqlWithBindings();
+     * // → "select * from `kois` where `status` = 'active' and `count` > 10"
+     */
+    public function toSqlWithBindings(?\Illuminate\Database\Eloquent\Builder $query = null): string
+    {
+        $query = $this->resolveQueryForDebug($query);
+
+        $sql = $query->toSql();
+        $bindings = $query->getBindings();
+
+        foreach ($bindings as $binding) {
+            $value = is_numeric($binding)
+                ? $binding
+                : "'".$this->escapeForDebug($binding)."'";
+
+            // Replace first ? with the binding value
+            $pos = strpos($sql, '?');
+            if ($pos !== false) {
+                $sql = substr_replace($sql, (string) $value, $pos, 1);
+            }
+        }
+
+        return $sql;
+    }
+
+    /**
+     * Get a human-readable explanation of this selection.
+     *
+     * @example
+     * $selection->explain();
+     * // → "StatusFilter IS 'active' AND CountFilter GREATER_THAN 10"
+     *
+     * $selection->explain(detailed: true);
+     * // → "StatusFilter (status) IS 'active' AND CountFilter (count) GREATER_THAN 10"
+     */
+    public function explain(bool $detailed = false): string
+    {
+        return $this->explainGroup($this->rootGroup, $detailed);
+    }
+
+    /**
+     * Dump SQL and bindings for debugging.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     *
+     * @return array{sql: string, sql_with_bindings: string, bindings: array<mixed>, filters: array<string>, explanation: string}
+     */
+    public function debug(?\Illuminate\Database\Eloquent\Builder $query = null): array
+    {
+        $query = $this->resolveQueryForDebug($query);
+
+        return [
+            'sql' => $query->toSql(),
+            'sql_with_bindings' => $this->toSqlWithBindings($query),
+            'bindings' => $query->getBindings(),
+            'filters' => $this->rootGroup->getAllFilterKeys(),
+            'explanation' => $this->explain(),
+        ];
+    }
+
+    /**
+     * Dump and die (for debugging).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     *
+     * @codeCoverageIgnore
+     */
+    public function dd(?\Illuminate\Database\Eloquent\Builder $query = null): never
+    {
+        dd($this->debug($query));
+    }
+
+    /**
+     * Resolve a query for debugging.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     * @return \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>
+     */
+    protected function resolveQueryForDebug(?\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    {
+        if ($query !== null) {
+            // @phpstan-ignore method.notFound (applySelection is added by Filterable trait)
+            return $query->applySelection($this);
+        }
+
+        if ($this->modelClass === null) {
+            throw new \LogicException('Cannot generate SQL without a model class or query. Use forModel() or pass a query.');
+        }
+
+        return $this->query();
+    }
+
+    /**
+     * Escape a value for debug output.
+     */
+    protected function escapeForDebug(mixed $value): string
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+
+        if (is_bool($value)) {
+            return $value ? '1' : '0';
+        }
+
+        return str_replace("'", "''", (string) $value);
+    }
+
+    /**
+     * Generate explanation for a filter group.
+     */
+    protected function explainGroup(FilterGroup $group, bool $detailed): string
+    {
+        $parts = [];
+        $operator = $group->getOperator() === GroupOperatorEnum::AND ? ' AND ' : ' OR ';
+
+        foreach ($group->getItems() as $item) {
+            if ($item instanceof FilterValue) {
+                $parts[] = $this->explainFilterValue($item, $detailed);
+            } elseif ($item instanceof FilterGroup) {
+                $nested = $this->explainGroup($item, $detailed);
+                if ($nested !== '') {
+                    $parts[] = '('.$nested.')';
+                }
+            }
+        }
+
+        return implode($operator, $parts);
+    }
+
+    /**
+     * Generate explanation for a filter value.
+     */
+    protected function explainFilterValue(FilterValue $filterValue, bool $detailed): string
+    {
+        $filterKey = $filterValue->getFilterKey();
+        $mode = strtoupper($filterValue->getMatchMode()->key());
+        $value = $this->formatValueForExplanation($filterValue->getValue());
+
+        if ($detailed) {
+            return "{$filterKey} {$mode} {$value}";
+        }
+
+        return "{$filterKey} {$mode} {$value}";
+    }
+
+    /**
+     * Format a value for human-readable explanation.
+     */
+    protected function formatValueForExplanation(mixed $value): string
+    {
+        if ($value === null) {
+            return 'NULL';
+        }
+
+        if (is_bool($value)) {
+            return $value ? 'true' : 'false';
+        }
+
+        if (is_array($value)) {
+            $formatted = array_map(fn ($v) => $this->formatValueForExplanation($v), $value);
+
+            return '['.implode(', ', $formatted).']';
+        }
+
+        if (is_object($value)) {
+            if (method_exists($value, 'toArray')) {
+                return $this->formatValueForExplanation($value->toArray());
+            }
+            if (method_exists($value, '__toString')) {
+                return "'".(string) $value."'";
+            }
+
+            return '{'.get_class($value).'}';
+        }
+
+        if (is_string($value)) {
+            return "'{$value}'";
+        }
+
+        return (string) $value;
+    }
 }

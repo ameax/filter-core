@@ -9,11 +9,11 @@ enum FilterTypeEnum: string
     case INTEGER = 'integer';
     case TEXT = 'text';
     case BOOLEAN = 'boolean';
+    case DECIMAL = 'decimal';
+    case DATE = 'date';
 
     // Phase 2 (uncomment when needed)
     // case MULTI_SELECT = 'multi_select';
-    // case DECIMAL = 'decimal';
-    // case DATE = 'date';
     // case DATETIME = 'datetime';
 
     // Phase 2: Uncomment when MULTI_SELECT is enabled
@@ -32,6 +32,8 @@ enum FilterTypeEnum: string
             self::INTEGER => __('filter-core::enums.filter_type.integer'),
             self::TEXT => __('filter-core::enums.filter_type.text'),
             self::BOOLEAN => __('filter-core::enums.filter_type.boolean'),
+            self::DECIMAL => __('filter-core::enums.filter_type.decimal'),
+            self::DATE => __('filter-core::enums.filter_type.date'),
         };
     }
 }

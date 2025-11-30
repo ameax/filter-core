@@ -1,9 +1,44 @@
 # TODO: DateTimeFilter Type
 
 **Priority:** High
-**Status:** Open
+**Status:** Completed (integrated into DateFilter)
 
-## Problem
+## Solution
+
+Instead of a separate DateTimeFilter class, timezone handling was integrated into DateFilter via `hasTime()`:
+
+```php
+// For DATETIME/TIMESTAMP columns with timezone handling
+class CreatedAtFilter extends DateFilter
+{
+    public function column(): string
+    {
+        return 'created_at';
+    }
+
+    public function hasTime(): bool
+    {
+        return true; // Enables timezone conversion to UTC
+    }
+}
+
+// Dynamic filter
+DateFilter::dynamic('created_at')
+    ->withColumn('created_at')
+    ->withTime();
+```
+
+Configure the user timezone in `config/filter-core.php`:
+
+```php
+return [
+    'timezone' => 'Europe/Berlin',
+];
+```
+
+---
+
+## Original Problem (Resolved)
 
 No built-in filter type for datetime/timestamp columns (`DATETIME`, `TIMESTAMP`). Users must create custom implementations.
 

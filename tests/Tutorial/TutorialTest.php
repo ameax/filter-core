@@ -47,10 +47,11 @@ use Ameax\FilterCore\Tests\TestCase;
  * 11. Custom Match Modes - Extensibility via MatchModeContract
  * 12. OR Logic & FilterGroups - Complex nested AND/OR conditions
  * 13. Collection Filtering - Apply filters to in-memory Collections
+ * 14. DecimalFilter - Filtering decimal/float values with precision and storedAsInteger
  *
  * DATA MODEL:
  * - Pond: has water_type (fresh/salt/brackish), capacity, is_heated
- * - Koi: belongs to Pond, has status (active/inactive/pending), count, is_active
+ * - Koi: belongs to Pond, has status, count, is_active, weight, price_cents
  */
 class TutorialTest extends TestCase
 {
@@ -87,11 +88,12 @@ class TutorialTest extends TestCase
         ]);
 
         // Create 5 kois distributed across ponds
-        Koi::create(['name' => 'Showa', 'status' => 'active', 'count' => 10, 'is_active' => true, 'pond_id' => $freshPond->id]);
-        Koi::create(['name' => 'Kohaku', 'status' => 'active', 'count' => 20, 'is_active' => true, 'pond_id' => $freshPond->id]);
-        Koi::create(['name' => 'Sanke', 'status' => 'inactive', 'count' => 5, 'is_active' => false, 'pond_id' => $saltPond->id]);
-        Koi::create(['name' => 'Asagi', 'status' => 'pending', 'count' => 15, 'is_active' => true, 'pond_id' => $brackishPond->id]);
-        Koi::create(['name' => 'Shusui', 'status' => 'pending', 'count' => 0, 'is_active' => false, 'pond_id' => null]); // No pond!
+        // Weight in kg (decimal), price in cents (stored as integer: 1999 = $19.99)
+        Koi::create(['name' => 'Showa', 'status' => 'active', 'count' => 10, 'is_active' => true, 'pond_id' => $freshPond->id, 'weight' => 2.50, 'price_cents' => 4999]);
+        Koi::create(['name' => 'Kohaku', 'status' => 'active', 'count' => 20, 'is_active' => true, 'pond_id' => $freshPond->id, 'weight' => 3.75, 'price_cents' => 7999]);
+        Koi::create(['name' => 'Sanke', 'status' => 'inactive', 'count' => 5, 'is_active' => false, 'pond_id' => $saltPond->id, 'weight' => 1.25, 'price_cents' => 2999]);
+        Koi::create(['name' => 'Asagi', 'status' => 'pending', 'count' => 15, 'is_active' => true, 'pond_id' => $brackishPond->id, 'weight' => 4.00, 'price_cents' => 9999]);
+        Koi::create(['name' => 'Shusui', 'status' => 'pending', 'count' => 0, 'is_active' => false, 'pond_id' => null, 'weight' => 0.50, 'price_cents' => 1999]); // No pond!
     }
 
     // ========================================================================
@@ -1662,5 +1664,416 @@ class TutorialTest extends TestCase
         // Active with count 5-15: Showa(10)
         $this->assertCount(1, $filtered);
         $this->assertEquals('Showa', $filtered->first()->name);
+    }
+
+    // ========================================================================
+    // SECTION 14: DECIMAL FILTER
+    // ========================================================================
+    // Filter decimal/float values with configurable precision.
+    // Supports storedAsInteger() for cents/millicents patterns.
+    // ========================================================================
+
+    /**
+     * Basic DecimalFilter usage with weight column.
+     *
+     * DecimalFilter works like IntegerFilter but supports decimal values
+     * with configurable precision (default: 2 decimal places).
+     */
+    public function test_14_1_basic_decimal_filter(): void
+    {
+        // Filter koi by exact weight
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->is(3.75))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('Kohaku', $result->first()->name);
+    }
+
+    /**
+     * DecimalFilter with comparison operators.
+     */
+    public function test_14_2_decimal_comparison_operators(): void
+    {
+        // Find koi heavier than 3kg
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->gt(3.0))
+            ->getQuery()
+            ->get();
+
+        // Kohaku (3.75) and Asagi (4.00) are > 3kg
+        $this->assertCount(2, $result);
+        $this->assertEquals(['Asagi', 'Kohaku'], $result->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * DecimalFilter with between range.
+     */
+    public function test_14_3_decimal_between(): void
+    {
+        // Find koi between 1.0 and 3.0 kg
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->between(1.0, 3.0))
+            ->getQuery()
+            ->get();
+
+        // Showa (2.50), Sanke (1.25) are in range
+        $this->assertCount(2, $result);
+        $this->assertEquals(['Sanke', 'Showa'], $result->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * Stored as Integer pattern: price stored in cents.
+     *
+     * When storedAsInteger() returns true, DecimalFilter automatically
+     * converts user input (19.99) to storage format (1999) before querying.
+     */
+    public function test_14_4_stored_as_integer(): void
+    {
+        // User searches for $49.99, filter converts to 4999 cents
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class])
+            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class)->is(49.99))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('Showa', $result->first()->name);
+        $this->assertEquals(4999, $result->first()->price_cents); // Stored as 4999
+    }
+
+    /**
+     * Stored as Integer with range query.
+     */
+    public function test_14_5_stored_as_integer_between(): void
+    {
+        // Find koi priced between $30 and $80
+        // Filter converts: 30.00 → 3000, 80.00 → 8000
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class])
+            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class)->between(30.00, 80.00))
+            ->getQuery()
+            ->get();
+
+        // Showa ($49.99 = 4999), Kohaku ($79.99 = 7999) are in range
+        $this->assertCount(2, $result);
+        $this->assertEquals(['Kohaku', 'Showa'], $result->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * Dynamic DecimalFilter creation.
+     */
+    public function test_14_6_dynamic_decimal_filter(): void
+    {
+        // Create decimal filter at runtime
+        $weightFilter = \Ameax\FilterCore\Filters\DecimalFilter::dynamic('weight')
+            ->withColumn('weight')
+            ->withLabel('Weight (kg)')
+            ->withPrecision(2)
+            ->withMin(0.0)
+            ->withMax(100.0);
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$weightFilter])
+            ->applyFilter(new FilterValue('weight', new \Ameax\FilterCore\MatchModes\GreaterThanOrEqualMatchMode, 3.0))
+            ->getQuery()
+            ->get();
+
+        // Kohaku (3.75), Asagi (4.00) >= 3kg
+        $this->assertCount(2, $result);
+    }
+
+    /**
+     * Dynamic DecimalFilter with storedAsInteger.
+     */
+    public function test_14_7_dynamic_decimal_stored_as_integer(): void
+    {
+        // Create price filter that stores as cents
+        $priceFilter = \Ameax\FilterCore\Filters\DecimalFilter::dynamic('price')
+            ->withColumn('price_cents')
+            ->withLabel('Price')
+            ->withPrecision(2)
+            ->withStoredAsInteger(true);
+
+        // Filter for prices > $50
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$priceFilter])
+            ->applyFilter(new FilterValue('price', new \Ameax\FilterCore\MatchModes\GreaterThanMatchMode, 50.00))
+            ->getQuery()
+            ->get();
+
+        // Kohaku ($79.99), Asagi ($99.99) > $50
+        $this->assertCount(2, $result);
+        $this->assertEquals(['Asagi', 'Kohaku'], $result->pluck('name')->sort()->values()->all());
+    }
+
+    /**
+     * Value sanitization with precision rounding.
+     */
+    public function test_14_8_decimal_sanitization(): void
+    {
+        $filter = new \Ameax\FilterCore\Tests\Filters\KoiWeightFilter;
+        $mode = new IsMatchMode;
+
+        // String input converted to float
+        $this->assertEquals(19.99, $filter->sanitizeValue('19.99', $mode));
+
+        // Integer input converted to float
+        $this->assertEquals(5.0, $filter->sanitizeValue(5, $mode));
+
+        // Rounded to 2 decimal places
+        $this->assertEquals(19.99, $filter->sanitizeValue(19.994, $mode));
+        $this->assertEquals(20.0, $filter->sanitizeValue(19.995, $mode));
+    }
+
+    /**
+     * DecimalFilter in collection filtering.
+     */
+    public function test_14_9_decimal_collection_filtering(): void
+    {
+        $collection = Koi::all();
+
+        $filtered = CollectionApplicator::for($collection)
+            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->lte(2.0))
+            ->getCollection();
+
+        // Sanke (1.25), Shusui (0.50) <= 2kg
+        $this->assertCount(2, $filtered);
+        $this->assertEquals(['Sanke', 'Shusui'], $filtered->pluck('name')->sort()->values()->all());
+    }
+
+    // ========================================================================
+    // SECTION 15: DATE FILTER
+    // ========================================================================
+    // Filter date/datetime columns with flexible date range definitions.
+    // Supports quick selections, relative ranges, specific periods, and custom ranges.
+    // ========================================================================
+
+    /**
+     * Basic DateFilter with quick selection (this month).
+     *
+     * DateFilter uses DateRangeValue to define date ranges.
+     * Quick selections are predefined ranges like "today", "this_month", etc.
+     */
+    public function test_15_1_date_filter_quick_selection(): void
+    {
+        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+            ->withColumn('created_at')
+            ->withLabel('Created Date');
+
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::thisMonth();
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$filter])
+            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->getQuery()
+            ->get();
+
+        // All koi were created "today" in test setup, which is this month
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * DateFilter with relative range (last 30 days).
+     *
+     * Relative ranges like "last 30 days" include the current partial period.
+     */
+    public function test_15_2_date_filter_relative_range(): void
+    {
+        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+            ->withColumn('created_at');
+
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::lastDays(30);
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$filter])
+            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * DateFilter with custom date range (between two dates).
+     */
+    public function test_15_3_date_filter_custom_range(): void
+    {
+        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+            ->withColumn('created_at');
+
+        // Custom range from January 1 to December 31 this year
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::between(
+            now()->startOfYear()->toDateString(),
+            now()->endOfYear()->toDateString()
+        );
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$filter])
+            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * DateFilter with "not in range" mode.
+     *
+     * NotInDateRangeMatchMode finds records OUTSIDE the specified range.
+     */
+    public function test_15_4_date_filter_not_in_range(): void
+    {
+        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+            ->withColumn('created_at');
+
+        // Find records NOT from last year
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::lastYear();
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$filter])
+            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode, $range))
+            ->getQuery()
+            ->get();
+
+        // All koi were created "today", not last year
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * DateFilter with specific period (specific quarter).
+     *
+     * Specific periods allow selecting exact periods like "Q2 2024".
+     */
+    public function test_15_5_date_filter_specific_period(): void
+    {
+        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+            ->withColumn('created_at');
+
+        // Get current quarter
+        $currentQuarter = (int) ceil(now()->month / 3);
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::quarter($currentQuarter, yearOffset: 0);
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$filter])
+            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * DateFilter with half-year period (H1/H2).
+     */
+    public function test_15_6_date_filter_half_year(): void
+    {
+        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+            ->withColumn('created_at');
+
+        // Get current half year (H1 or H2)
+        $currentHalf = now()->month <= 6 ? 1 : 2;
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::halfYear($currentHalf, yearOffset: 0);
+
+        $result = QueryApplicator::for(Koi::query())
+            ->withFilters([$filter])
+            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->getQuery()
+            ->get();
+
+        $this->assertCount(5, $result);
+    }
+
+    /**
+     * DateFilter with direction restriction (past only).
+     *
+     * Filters can be restricted to only allow past or future date selections.
+     */
+    public function test_15_7_date_filter_direction_restriction(): void
+    {
+        $pastOnlyFilter = \Ameax\FilterCore\Filters\DateFilter::dynamic('birth_date')
+            ->withColumn('created_at')
+            ->withPastOnly();
+
+        $this->assertEquals(
+            [\Ameax\FilterCore\DateRange\DateDirection::PAST],
+            $pastOnlyFilter->allowedDirections()
+        );
+
+        $futureOnlyFilter = \Ameax\FilterCore\Filters\DateFilter::dynamic('due_date')
+            ->withColumn('due_at')
+            ->withFutureOnly();
+
+        $this->assertEquals(
+            [\Ameax\FilterCore\DateRange\DateDirection::FUTURE],
+            $futureOnlyFilter->allowedDirections()
+        );
+    }
+
+    /**
+     * DateRangeValue JSON serialization round-trip.
+     */
+    public function test_15_8_date_range_serialization(): void
+    {
+        $original = \Ameax\FilterCore\DateRange\DateRangeValue::lastDays(30);
+
+        // Serialize to JSON
+        $json = json_encode($original->toArray());
+
+        // Deserialize
+        $restored = \Ameax\FilterCore\DateRange\DateRangeValue::fromArray(json_decode($json, true));
+
+        // Both should resolve to same dates
+        $originalResolved = $original->resolve();
+        $restoredResolved = $restored->resolve();
+
+        $this->assertEquals(
+            $originalResolved->start->toDateString(),
+            $restoredResolved->start->toDateString()
+        );
+        $this->assertEquals(
+            $originalResolved->end->toDateString(),
+            $restoredResolved->end->toDateString()
+        );
+    }
+
+    /**
+     * QuickDateRange enum provides predefined quick selections.
+     */
+    public function test_15_9_quick_date_range_options(): void
+    {
+        $options = \Ameax\FilterCore\DateRange\DateRangeOptions::getQuickOptions();
+
+        // Should have many predefined options
+        $this->assertArrayHasKey('today', $options);
+        $this->assertArrayHasKey('yesterday', $options);
+        $this->assertArrayHasKey('this_week', $options);
+        $this->assertArrayHasKey('last_week', $options);
+        $this->assertArrayHasKey('this_month', $options);
+        $this->assertArrayHasKey('last_month', $options);
+        $this->assertArrayHasKey('this_quarter', $options);
+        $this->assertArrayHasKey('this_half_year', $options);
+        $this->assertArrayHasKey('this_year', $options);
+        $this->assertArrayHasKey('last_30_days', $options);
+    }
+
+    /**
+     * DateRangeValue with expression (natural language).
+     */
+    public function test_15_10_date_expression(): void
+    {
+        // PHP DateTime natural language works
+        $range = \Ameax\FilterCore\DateRange\DateRangeValue::expression('first day of this month');
+        $resolved = $range->resolve();
+
+        $this->assertEquals(
+            now()->startOfMonth()->toDateString(),
+            $resolved->start->toDateString()
+        );
     }
 }

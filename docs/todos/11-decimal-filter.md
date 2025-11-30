@@ -1,7 +1,7 @@
 # TODO: DecimalFilter Type
 
 **Priority:** High
-**Status:** Open
+**Status:** Completed
 
 ## Problem
 
@@ -37,6 +37,28 @@ abstract class DecimalFilter extends Filter
     public function precision(): int
     {
         return 2;
+    }
+
+    /**
+     * Whether the value is stored as integer in the database.
+     * E.g., 19.99 stored as 1999 (cents).
+     * When true, values are multiplied by 10^precision for queries.
+     */
+    public function storedAsInteger(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Convert display value to storage value.
+     */
+    protected function toStorageValue(float $value): int|float
+    {
+        if ($this->storedAsInteger()) {
+            return (int) round($value * (10 ** $this->precision()));
+        }
+
+        return $value;
     }
 
     public function allowedMatchModes(): array
@@ -142,7 +164,7 @@ abstract class DecimalFilter extends Filter
 ### Usage Examples
 
 ```php
-// Price Filter
+// Price Filter (stored as decimal in DB)
 class PriceFilter extends DecimalFilter
 {
     public function column(): string
@@ -158,6 +180,40 @@ class PriceFilter extends DecimalFilter
     public function precision(): int
     {
         return 2; // $19.99
+    }
+
+    public function min(): float
+    {
+        return 0.0;
+    }
+
+    public function max(): float
+    {
+        return 999999.99;
+    }
+}
+
+// Price Filter (stored as integer/cents in DB)
+class PriceCentsFilter extends DecimalFilter
+{
+    public function column(): string
+    {
+        return 'price'; // DB stores 1999 for $19.99
+    }
+
+    public function label(): string
+    {
+        return 'Price';
+    }
+
+    public function precision(): int
+    {
+        return 2;
+    }
+
+    public function storedAsInteger(): bool
+    {
+        return true; // User enters 19.99 → Query: WHERE price = 1999
     }
 
     public function min(): float
@@ -300,8 +356,8 @@ class PriceFilter extends DecimalFilter {
 ## Implementation Steps
 
 1. Add `FilterTypeEnum::DECIMAL` case
-2. Create `DecimalFilter` base class
-3. Add `DynamicDecimalFilter` with precision/min/max options
+2. Create `DecimalFilter` base class with `storedAsInteger()` support
+3. Add `DynamicDecimalFilter` with precision/min/max/storedAsInteger options
 4. Add comprehensive tests:
    - Decimal sanitization (string, int, float, null)
    - Precision rounding
@@ -309,6 +365,7 @@ class PriceFilter extends DecimalFilter {
    - Between with decimal range
    - Min/max validation
    - Float precision edge cases
+   - **storedAsInteger conversion (19.99 → 1999)**
    - Dynamic filter
 5. Add to documentation with E-Commerce examples
 
@@ -328,3 +385,4 @@ class PriceFilter extends DecimalFilter {
 - Handles float precision issues via rounding
 - Type-safe with `typedValue()` returning float
 - Same match modes as IntegerFilter
+- **`storedAsInteger()` support**: For columns that store decimals as integers (e.g., cents). Converts user input (19.99) to storage format (1999) automatically via `toStorageValue()`

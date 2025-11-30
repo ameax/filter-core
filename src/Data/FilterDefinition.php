@@ -10,6 +10,7 @@ use Ameax\FilterCore\MatchModes\AllMatchMode;
 use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\BetweenMatchMode;
 use Ameax\FilterCore\MatchModes\ContainsMatchMode;
+use Ameax\FilterCore\MatchModes\DateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\EmptyMatchMode;
 use Ameax\FilterCore\MatchModes\EndsWithMatchMode;
 use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
@@ -20,6 +21,7 @@ use Ameax\FilterCore\MatchModes\LessThanMatchMode;
 use Ameax\FilterCore\MatchModes\LessThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\MatchModes\NotEmptyMatchMode;
+use Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\RegexMatchMode;
 use Ameax\FilterCore\MatchModes\StartsWithMatchMode;
 use Illuminate\Contracts\Support\Arrayable;
@@ -176,6 +178,21 @@ final class FilterDefinition implements Arrayable, JsonSerializable
             ],
             FilterTypeEnum::BOOLEAN => [
                 new IsMatchMode,
+            ],
+            FilterTypeEnum::DECIMAL => [
+                new IsMatchMode,
+                new IsNotMatchMode,
+                new AnyMatchMode,
+                new NoneMatchMode,
+                new GreaterThanMatchMode,
+                new GreaterThanOrEqualMatchMode,
+                new LessThanMatchMode,
+                new LessThanOrEqualMatchMode,
+                new BetweenMatchMode,
+            ],
+            FilterTypeEnum::DATE => [
+                new DateRangeMatchMode,
+                new NotInDateRangeMatchMode,
             ],
         };
 

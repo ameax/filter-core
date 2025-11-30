@@ -65,6 +65,53 @@ $activeFilter = BooleanFilter::dynamic('is_active')
     ->withLabel('Is Active');
 ```
 
+### DecimalFilter
+
+```php
+use Ameax\FilterCore\Filters\DecimalFilter;
+
+// Basic decimal filter
+$priceFilter = DecimalFilter::dynamic('price')
+    ->withColumn('price')
+    ->withLabel('Price')
+    ->withPrecision(2)
+    ->withMin(0.0)
+    ->withMax(999999.99);
+
+// For columns storing decimals as integers (cents pattern)
+$priceCentsFilter = DecimalFilter::dynamic('price_cents')
+    ->withColumn('price_cents')
+    ->withLabel('Price')
+    ->withPrecision(2)
+    ->withStoredAsInteger(true); // 19.99 → queries as 1999
+```
+
+### DateFilter
+
+```php
+use Ameax\FilterCore\Filters\DateFilter;
+
+// Basic date filter
+$dateFilter = DateFilter::dynamic('created_at')
+    ->withColumn('created_at')
+    ->withLabel('Created Date');
+
+// Past-only filter (for birth dates, etc.)
+$birthFilter = DateFilter::dynamic('birth_date')
+    ->withColumn('birth_date')
+    ->withLabel('Birth Date')
+    ->withPastOnly();
+
+// Future-only filter (for due dates, etc.)
+$dueFilter = DateFilter::dynamic('due_date')
+    ->withColumn('due_at')
+    ->withLabel('Due Date')
+    ->withFutureOnly()
+    ->withAllowToday(true);
+```
+
+See [Date Filter](./10-date-filter.md) for comprehensive date filtering documentation.
+
 ## Configuration Methods
 
 ### Required
@@ -163,6 +210,14 @@ $filterConfigs = [
         'label' => 'Count',
     ],
     [
+        'key' => 'price',
+        'type' => 'decimal',
+        'column' => 'price',
+        'label' => 'Price',
+        'precision' => 2,
+        'min' => 0.0,
+    ],
+    [
         'key' => 'name',
         'type' => 'text',
         'column' => 'name',
@@ -173,6 +228,13 @@ $filterConfigs = [
         'type' => 'boolean',
         'column' => 'is_active',
         'label' => 'Is Active',
+    ],
+    [
+        'key' => 'created_at',
+        'type' => 'date',
+        'column' => 'created_at',
+        'label' => 'Created Date',
+        'directions' => ['past'], // Optional: restrict to past only
     ],
 ];
 
@@ -189,6 +251,14 @@ foreach ($filterConfigs as $config) {
             ->withColumn($config['column'])
             ->withLabel($config['label'] ?? $config['key']),
 
+        'decimal' => DecimalFilter::dynamic($config['key'])
+            ->withColumn($config['column'])
+            ->withLabel($config['label'] ?? $config['key'])
+            ->withPrecision($config['precision'] ?? 2)
+            ->withMin($config['min'] ?? null)
+            ->withMax($config['max'] ?? null)
+            ->withStoredAsInteger($config['stored_as_integer'] ?? false),
+
         'text' => TextFilter::dynamic($config['key'])
             ->withColumn($config['column'])
             ->withLabel($config['label'] ?? $config['key']),
@@ -196,6 +266,15 @@ foreach ($filterConfigs as $config) {
         'boolean' => BooleanFilter::dynamic($config['key'])
             ->withColumn($config['column'])
             ->withLabel($config['label'] ?? $config['key']),
+
+        'date' => DateFilter::dynamic($config['key'])
+            ->withColumn($config['column'])
+            ->withLabel($config['label'] ?? $config['key'])
+            ->withAllowedDirections(
+                isset($config['directions'])
+                    ? array_map(fn($d) => DateDirection::from($d), $config['directions'])
+                    : null
+            ),
 
         default => throw new \InvalidArgumentException("Unknown filter type: {$config['type']}"),
     };
@@ -221,8 +300,10 @@ class FilterBuilder
         $filter = match ($config['type']) {
             'select' => SelectFilter::dynamic($config['key']),
             'integer' => IntegerFilter::dynamic($config['key']),
+            'decimal' => DecimalFilter::dynamic($config['key']),
             'text' => TextFilter::dynamic($config['key']),
             'boolean' => BooleanFilter::dynamic($config['key']),
+            'date' => DateFilter::dynamic($config['key']),
             default => throw new \InvalidArgumentException("Unknown type: {$config['type']}"),
         };
 
@@ -242,6 +323,12 @@ class FilterBuilder
 
         if (isset($config['nullable'])) {
             $filter->withNullable($config['nullable']);
+        }
+
+        // Date-specific configuration
+        if (isset($config['directions']) && method_exists($filter, 'withAllowedDirections')) {
+            $directions = array_map(fn($d) => DateDirection::from($d), $config['directions']);
+            $filter->withAllowedDirections($directions);
         }
 
         return $filter;
@@ -320,8 +407,10 @@ Dynamic filters inherit allowed modes from their base type:
 |--------------|---------------|
 | `SelectFilter::dynamic()` | `is`, `isNot`, `any`, `all`, `none` |
 | `IntegerFilter::dynamic()` | `is`, `isNot`, `gt`, `gte`, `lt`, `lte`, `between` |
+| `DecimalFilter::dynamic()` | `is`, `isNot`, `any`, `none`, `gt`, `gte`, `lt`, `lte`, `between` |
 | `TextFilter::dynamic()` | `is`, `isNot`, `contains`, `startsWith`, `endsWith`, `regex` |
 | `BooleanFilter::dynamic()` | `is` |
+| `DateFilter::dynamic()` | `dateRange`, `notInDateRange` |
 
 With `withNullable(true)`, all types also support `empty` and `notEmpty`.
 
@@ -346,5 +435,6 @@ $icon = $meta['icon']; // 'status-icon'
 
 ## Next Steps
 
+- [Date Filter](./10-date-filter.md) - Date/datetime filtering with ranges
 - [Validation & Sanitization](./08-validation-sanitization.md) - Input processing
 - [Filter Types](./02-filter-types.md) - Class-based filter definitions

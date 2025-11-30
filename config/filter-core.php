@@ -15,4 +15,19 @@ return [
 
     'user_model' => \Illuminate\Foundation\Auth\User::class,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Timezone
+    |--------------------------------------------------------------------------
+    |
+    | The timezone used for date/datetime filter queries.
+    | When a user filters for "today" in Europe/Berlin, the query needs to
+    | convert this to UTC for the database.
+    |
+    | Set to null to use the application timezone (config('app.timezone')).
+    |
+    */
+
+    'timezone' => null,
+
 ];

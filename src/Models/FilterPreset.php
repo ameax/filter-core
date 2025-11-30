@@ -12,10 +12,10 @@ use Illuminate\Database\Eloquent\Model;
  * FilterPreset - Persistable filter configurations
  *
  * @property int $id
- * @property string $name
+ * @property string|null $name
  * @property string|null $description
- * @property string $model_type
- * @property array $configuration
+ * @property string|null $model_type
+ * @property array<string, mixed> $configuration
  * @property int|null $user_id
  * @property bool $is_public
  * @property \Carbon\Carbon $created_at
@@ -60,7 +60,9 @@ class FilterPreset extends Model
 
         // Ensure model is set (from configuration or preset)
         if (! $selection->hasModel() && $this->model_type !== null) {
-            $selection->forModel($this->model_type);
+            /** @var class-string $modelType */
+            $modelType = $this->model_type;
+            $selection->forModel($modelType);
         }
 
         return $selection;
@@ -171,11 +173,12 @@ class FilterPreset extends Model
     /**
      * Get the user who owns this preset.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Illuminate\Foundation\Auth\User, FilterPreset>
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Illuminate\Database\Eloquent\Model, $this>
      */
     public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         // Use config for User model to allow customization
+        /** @var class-string<\Illuminate\Database\Eloquent\Model> $userModel */
         $userModel = config('filter-core.user_model', \Illuminate\Foundation\Auth\User::class);
 
         return $this->belongsTo($userModel);

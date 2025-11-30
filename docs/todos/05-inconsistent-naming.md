@@ -1,9 +1,22 @@
 # TODO: Inconsistent Naming Convention
 
 **Priority:** Low
-**Status:** Open
+**Status:** Completed
 
-## Problem
+## Solution
+
+Documented the existing naming conventions in `docs/guides/99-naming-conventions.md`. The current pragmatic approach (Option A) was chosen as it causes the least disruption while being documented clearly.
+
+See the documentation for details on:
+- Method naming (getters, setters, boolean methods)
+- Factory methods (make, create, for, from*)
+- Conversion methods (toArray, toJson, toSql, etc.)
+- Class naming conventions
+- Property naming conventions
+
+---
+
+## Original Problem
 
 Mixed naming patterns across the codebase make the API less predictable:
 

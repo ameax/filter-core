@@ -620,39 +620,22 @@ class FilterValueBuilder {
 
 ## 6. Performance Considerations
 
-### 6.1 N+1 with Multiple Relation Filters
+### 6.1 N+1 with Multiple Relation Filters ✅ RESOLVED
+
+**Original Problem:** Multiple filters on the same relation generated multiple `WHERE EXISTS` subqueries.
+
+**Solution Implemented:** `QueryApplicator` now groups filters by relation and combines them into a single `whereHas`:
 
 ```php
+// Multiple filters on same relation
 Koi::query()->applyFilters([
     FilterValue::for(PondWaterTypeFilter::class)->is('fresh'),
     FilterValue::for(PondCapacityFilter::class)->greaterThan(1000),
 ]);
 
-// Generates:
-// WHERE EXISTS (SELECT * FROM ponds WHERE kois.pond_id = ponds.id AND water_type = 'fresh')
-// AND EXISTS (SELECT * FROM ponds WHERE kois.pond_id = ponds.id AND capacity > 1000)
-
-// Could be optimized to:
-// WHERE EXISTS (SELECT * FROM ponds WHERE kois.pond_id = ponds.id AND water_type = 'fresh' AND capacity > 1000)
-```
-
-**Impact:** Medium - Performance degradation with many relation filters.
-
-**Recommendation:** Combine relation filters:
-
-```php
-class QueryApplicator {
-    protected function applyRelationFilters(array $filtersByRelation): void
-    {
-        foreach ($filtersByRelation as $relation => $filters) {
-            $this->query->whereHas($relation, function($query) use ($filters) {
-                foreach ($filters as $filter) {
-                    // Apply all filters for this relation in one whereHas
-                }
-            });
-        }
-    }
-}
+// Now generates optimized:
+// WHERE EXISTS (SELECT * FROM ponds WHERE kois.pond_id = ponds.id
+//               AND water_type = 'fresh' AND capacity > 1000)
 ```
 
 ---
@@ -785,7 +768,7 @@ Koi::getFilterByKey('KoiStatusFilter'); // Get specific filter
 | **High** | Serialization loses context | Filter registry + metadata | Partial |
 | ~~**Medium**~~ | ~~Relation not in definition~~ | ~~Add `FilterDefinition::$relation`~~ | ✅ DONE |
 | ~~**Medium**~~ | ~~whereDoesntHave support~~ | ~~`RelationModeEnum` + factory methods~~ | ✅ DONE |
-| **Medium** | N+1 relation queries | Combine relation filters | Open |
+| ~~**Medium**~~ | ~~N+1 relation queries~~ | ~~Combine relation filters~~ | ✅ DONE |
 | ~~**Medium**~~ | ~~No options validation~~ | ~~Validate in SelectFilter~~ | ✅ DONE |
 | **Low** | Inconsistent naming | Refactoring | Open |
 | **Low** | Missing debugging tools | Add helper methods | Open |
@@ -822,11 +805,14 @@ The filter-core package has evolved into a **production-ready** filtering soluti
 4. **Extensible match modes** - Class-based `MatchModeContract` system
 5. **Type safety** - `typedValue()`, `BetweenValue` DTO, `sanitizeValue()`
 6. **Model-based validation** - `validateSelection()`, `getFilterByKey()`, `getFilterKeys()`
+7. **DateFilter** - Comprehensive date filtering with `DateRangeValue` (relative dates, fiscal years, etc.)
+8. **DecimalFilter** - Decimal/float filtering with `storedAsInteger()` support
+9. **QuickFilterPresets** - Database-driven user-configurable date range presets
+10. **N+1 optimization** - Relation filters combined into single `whereHas` per relation
 
 ### Remaining Open Items
 
-1. **Performance** - N+1 relation queries optimization
-2. **Developer Experience** - Debugging tools, consistent naming
-3. **Advanced Relations** - nested relations, morphTo, aggregate filters
+1. **Developer Experience** - Debugging tools, consistent naming
+2. **Advanced Relations** - nested relations, morphTo, aggregate filters
 
 The package is now suitable for **complex production applications** with advanced filtering requirements including nested AND/OR logic, relation filters, and custom match modes.

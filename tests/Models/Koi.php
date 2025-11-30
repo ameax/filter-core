@@ -25,12 +25,16 @@ class Koi extends Model
         'name',
         'is_active',
         'variety',
+        'weight',
+        'price_cents',
     ];
 
     protected $casts = [
         'pond_id' => 'integer',
         'count' => 'integer',
         'is_active' => 'boolean',
+        'weight' => 'decimal:2',
+        'price_cents' => 'integer',
     ];
 
     protected static function filterResolver(): Closure

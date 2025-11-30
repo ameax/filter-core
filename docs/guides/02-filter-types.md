@@ -1,15 +1,17 @@
 # Filter Types
 
-Filter-core provides 4 base filter types, each optimized for different data types.
+Filter-core provides 6 base filter types, each optimized for different data types.
 
 ## Overview
 
 | Filter Type | Purpose | Allowed Match Modes |
 |-------------|---------|---------------------|
 | `SelectFilter` | Predefined options | `is`, `isNot`, `any`, `all`, `none` |
-| `IntegerFilter` | Numeric comparisons | `is`, `isNot`, `gt`, `gte`, `lt`, `lte`, `between` |
+| `IntegerFilter` | Whole number comparisons | `is`, `isNot`, `gt`, `gte`, `lt`, `lte`, `between` |
+| `DecimalFilter` | Decimal/float comparisons | `is`, `isNot`, `any`, `none`, `gt`, `gte`, `lt`, `lte`, `between` |
 | `TextFilter` | Text searching | `is`, `isNot`, `contains`, `startsWith`, `endsWith`, `regex` |
 | `BooleanFilter` | True/False values | `is` |
+| `DateFilter` | Date/datetime ranges | `dateRange`, `notInDateRange` |
 
 ## SelectFilter
 
@@ -154,6 +156,134 @@ $products = Product::query()
 | `->lt(50)` | `WHERE count < 50` |
 | `->lte(50)` | `WHERE count <= 50` |
 | `->between(10, 100)` | `WHERE count BETWEEN 10 AND 100` |
+
+## DecimalFilter
+
+Use for decimal/float fields (price, weight, rating, percentage).
+
+### Definition
+
+```php
+<?php
+
+namespace App\Filters;
+
+use Ameax\FilterCore\Filters\DecimalFilter;
+
+class PriceFilter extends DecimalFilter
+{
+    public function column(): string
+    {
+        return 'price';
+    }
+
+    // Number of decimal places (default: 2)
+    public function precision(): int
+    {
+        return 2;
+    }
+
+    // Optional: minimum value
+    public function min(): ?float
+    {
+        return 0.0;
+    }
+
+    // Optional: maximum value
+    public function max(): ?float
+    {
+        return 999999.99;
+    }
+}
+```
+
+### Usage
+
+```php
+use App\Filters\PriceFilter;
+use Ameax\FilterCore\Data\FilterValue;
+
+// Exact match
+$products = Product::query()
+    ->applyFilter(FilterValue::for(PriceFilter::class)->is(19.99))
+    ->get();
+
+// Greater than
+$products = Product::query()
+    ->applyFilter(FilterValue::for(PriceFilter::class)->gt(50.00))
+    ->get();
+
+// Between (inclusive)
+$products = Product::query()
+    ->applyFilter(FilterValue::for(PriceFilter::class)->between(10.00, 100.00))
+    ->get();
+
+// Any of multiple values
+$products = Product::query()
+    ->applyFilter(FilterValue::for(PriceFilter::class)->any([9.99, 19.99, 29.99]))
+    ->get();
+```
+
+### Generated SQL
+
+| Method | SQL |
+|--------|-----|
+| `->is(19.99)` | `WHERE price = 19.99` |
+| `->isNot(19.99)` | `WHERE price != 19.99` |
+| `->gt(50.00)` | `WHERE price > 50.00` |
+| `->gte(50.00)` | `WHERE price >= 50.00` |
+| `->lt(10.00)` | `WHERE price < 10.00` |
+| `->lte(10.00)` | `WHERE price <= 10.00` |
+| `->between(10, 100)` | `WHERE price BETWEEN 10 AND 100` |
+| `->any([9.99, 19.99])` | `WHERE price IN (9.99, 19.99)` |
+
+### Stored as Integer (Cents Pattern)
+
+Some applications store decimal values as integers (e.g., price in cents: $19.99 = 1999).
+DecimalFilter supports this via `storedAsInteger()`:
+
+```php
+class PriceCentsFilter extends DecimalFilter
+{
+    public function column(): string
+    {
+        return 'price_cents'; // DB stores 1999 for $19.99
+    }
+
+    public function precision(): int
+    {
+        return 2;
+    }
+
+    public function storedAsInteger(): bool
+    {
+        return true; // Enables automatic conversion
+    }
+}
+
+// User enters decimal, filter converts to integer for query
+$products = Product::query()
+    ->applyFilter(FilterValue::for(PriceCentsFilter::class)->is(19.99))
+    ->get();
+// SQL: WHERE price_cents = 1999
+
+$products = Product::query()
+    ->applyFilter(FilterValue::for(PriceCentsFilter::class)->between(10.00, 50.00))
+    ->get();
+// SQL: WHERE price_cents BETWEEN 1000 AND 5000
+```
+
+### Precision and Rounding
+
+Values are automatically rounded to the specified precision:
+
+```php
+$filter = new PriceFilter(); // precision = 2
+
+$filter->sanitizeValue(19.994, $mode);  // Returns 19.99
+$filter->sanitizeValue(19.995, $mode);  // Returns 20.00
+$filter->sanitizeValue('19.99', $mode); // Returns 19.99 (string converted)
+```
 
 ### BetweenValue DTO
 
@@ -362,6 +492,7 @@ new FilterValue('StatusFilter', MatchMode::is(), 'active');
 
 ## Next Steps
 
-- [Match Modes](./03-match-modes.md) - All 17 match modes in detail
+- [Date Filter](./10-date-filter.md) - Date/datetime filtering with ranges
+- [Match Modes](./03-match-modes.md) - All match modes in detail
 - [Dynamic Filters](./07-dynamic-filters.md) - Create filters at runtime
 - [Validation](./08-validation-sanitization.md) - Input validation and sanitization

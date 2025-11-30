@@ -128,7 +128,7 @@ final class QueryApplicator
         // First, check if filter has custom apply logic
         if ($filter !== null && $filter->apply($this->query, $matchMode, $value)) {
             // Custom logic was applied - done
-        } elseif ($relation !== null && $this->query instanceof Builder) {
+        } elseif ($filter !== null && $relation !== null && $this->query instanceof Builder) {
             // Apply via relation with appropriate mode (whereHas, whereDoesntHave)
             $this->applyRelationFilter(
                 $this->query,
@@ -433,7 +433,7 @@ final class QueryApplicator
         $condition = function (Builder|QueryBuilder $q) use ($filter, $matchMode, $column, $value, $relation): void {
             if ($filter !== null && $filter->apply($q, $matchMode, $value)) {
                 // Custom logic was applied
-            } elseif ($relation !== null && $q instanceof Builder) {
+            } elseif ($filter !== null && $relation !== null && $q instanceof Builder) {
                 $this->applyRelationFilter(
                     $q,
                     $relation,

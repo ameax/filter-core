@@ -1,0 +1,51 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     *
+     * Creates the filter_quick_presets table for user-defined quick date range options.
+     * Labels are auto-generated from date_range_config via DateRangeValue::toLabel().
+     */
+    public function up(): void
+    {
+        Schema::create('filter_quick_presets', function (Blueprint $table): void {
+            $table->id();
+
+            // Scope (null = global, otherwise user-defined: 'invoices', 'tenant_123', etc.)
+            $table->string('scope', 255)->nullable();
+
+            // Date range configuration (DateRangeValue serialized)
+            // Label is auto-generated from this config
+            $table->json('date_range_config');
+
+            // Direction filter context (null = both, 'past', 'future')
+            $table->string('direction', 10)->nullable();
+
+            // Display order
+            $table->integer('sort_order')->default(0);
+
+            // Active state
+            $table->boolean('is_active')->default(true);
+
+            $table->timestamps();
+
+            // Index for efficient querying
+            $table->index(['scope', 'is_active', 'direction'], 'filter_quick_presets_scope_idx');
+            $table->index(['is_active', 'sort_order'], 'filter_quick_presets_active_order_idx');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('filter_quick_presets');
+    }
+};

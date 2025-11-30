@@ -1,9 +1,38 @@
 # TODO: Missing Debugging Tools
 
 **Priority:** Low
-**Status:** Open
+**Status:** Completed
 
-## Problem
+## Solution
+
+Implemented debugging tools in `FilterSelection`:
+
+```php
+// Get SQL with placeholders
+$selection->toSql();
+// → "select * from `kois` where `status` = ? and `count` > ?"
+
+// Get SQL with bindings interpolated
+$selection->toSqlWithBindings();
+// → "select * from `kois` where `status` = 'active' and `count` > 10"
+
+// Human-readable explanation
+$selection->explain();
+// → "KoiStatusFilter IS 'active' AND KoiCountFilter GT 10"
+
+// Full debug info
+$selection->debug();
+// → ['sql' => ..., 'sql_with_bindings' => ..., 'bindings' => [...], 'filters' => [...], 'explanation' => ...]
+
+// Dump and die
+$selection->dd();
+```
+
+All methods accept an optional query parameter, or use the model class if set via `forModel()`.
+
+---
+
+## Original Problem
 
 Hard to debug complex filter queries. No built-in tools to:
 - See the generated SQL for a FilterSelection
