@@ -622,6 +622,81 @@ return [
 ];
 ```
 
+## Debugging Tools
+
+FilterSelection provides several methods to debug and inspect the generated queries:
+
+### SQL Preview
+
+```php
+$selection = FilterSelection::make()
+    ->forModel(User::class)
+    ->where(StatusFilter::class)->is('active')
+    ->where(CountFilter::class)->gt(10);
+
+// SQL with placeholders
+$selection->toSql();
+// → "select * from `users` where `status` = ? and `count` > ?"
+
+// SQL with values interpolated (for debugging only!)
+$selection->toSqlWithBindings();
+// → "select * from `users` where `status` = 'active' and `count` > 10"
+```
+
+### Human-Readable Explanation
+
+```php
+$selection->explain();
+// → "StatusFilter IS 'active' AND CountFilter GT 10"
+
+// With nested groups
+$selection = FilterSelection::make()
+    ->where(StatusFilter::class)->is('active')
+    ->orWhere(function ($g) {
+        $g->where(CountFilter::class)->gt(10);
+        $g->where(CountFilter::class)->lt(100);
+    });
+
+$selection->explain();
+// → "StatusFilter IS 'active' AND (CountFilter GT 10 OR CountFilter LT 100)"
+```
+
+### Full Debug Info
+
+```php
+$debug = $selection->debug();
+// Returns:
+// [
+//     'sql' => 'select * from `users` where `status` = ? and `count` > ?',
+//     'sql_with_bindings' => 'select * from `users` where `status` = \'active\' and `count` > 10',
+//     'bindings' => ['active', 10],
+//     'filters' => ['StatusFilter', 'CountFilter'],
+//     'explanation' => 'StatusFilter IS \'active\' AND CountFilter GT 10'
+// ]
+```
+
+### Dump and Die
+
+```php
+// For quick debugging
+$selection->dd();
+```
+
+### Using with Provided Query
+
+All debug methods accept an optional query parameter:
+
+```php
+// Without model class set
+$selection = FilterSelection::make()
+    ->where(StatusFilter::class)->is('active');
+
+// Provide query explicitly
+$selection->toSql(User::query());
+$selection->toSqlWithBindings(User::query());
+$selection->debug(User::query());
+```
+
 ## Next Steps
 
 - [Relation Filters](./05-relation-filters.md) - Filter through relationships

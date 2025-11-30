@@ -107,14 +107,16 @@ $filterValue = StatusFilter::value()->is('active');
 
 ### Filter Types
 
-Filter-core provides 4 base filter types:
+Filter-core provides 6 base filter types:
 
 | Type | Use Case | Example |
 |------|----------|---------|
 | `SelectFilter` | Predefined options | Status, Category, Type |
-| `IntegerFilter` | Numeric values | Count, Age, Price |
+| `IntegerFilter` | Numeric values | Count, Age, Quantity |
+| `DecimalFilter` | Decimal/float values | Price, Weight, Rating |
 | `TextFilter` | Text search | Name, Description |
 | `BooleanFilter` | True/False | Is Active, Is Published |
+| `DateFilter` | Date/datetime ranges | Created At, Due Date |
 
 ### Match Modes
 
@@ -131,7 +133,7 @@ Each filter type supports different match modes:
 | `between` | Range | `->between(10, 100)` |
 | `contains` | Text contains | `->contains('search')` |
 
-See [Match Modes](./03-match-modes.md) for the complete list.
+See [Match Modes](./03-match-modes.md) for the complete list of 18 match modes.
 
 ## Next Steps
 

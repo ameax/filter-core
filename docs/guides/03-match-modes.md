@@ -1,6 +1,6 @@
 # Match Modes
 
-Filter-core provides 17 built-in match modes for different comparison operations.
+Filter-core provides 18 built-in match modes for different comparison operations.
 
 ## Overview
 
@@ -22,6 +22,8 @@ Filter-core provides 17 built-in match modes for different comparison operations
 | `RegexMatchMode` | `regex` | Regular expression | `REGEXP pattern` |
 | `EmptyMatchMode` | `empty` | Is null/empty | `IS NULL` |
 | `NotEmptyMatchMode` | `not_empty` | Is not null/empty | `IS NOT NULL` |
+| `DateRangeMatchMode` | `date_range` | Within date range | `BETWEEN start AND end` |
+| `NotInDateRangeMatchMode` | `not_in_date_range` | Outside date range | `NOT BETWEEN start AND end` |
 
 ## Using Match Modes
 
@@ -233,8 +235,10 @@ Not all modes work with all filter types:
 |-------------|-----------------|
 | `SelectFilter` | `is`, `isNot`, `any`, `all`, `none`, `empty`*, `notEmpty`* |
 | `IntegerFilter` | `is`, `isNot`, `gt`, `gte`, `lt`, `lte`, `between`, `empty`*, `notEmpty`* |
+| `DecimalFilter` | `is`, `isNot`, `any`, `none`, `gt`, `gte`, `lt`, `lte`, `between`, `empty`*, `notEmpty`* |
 | `TextFilter` | `is`, `isNot`, `contains`, `startsWith`, `endsWith`, `regex`, `empty`*, `notEmpty`* |
 | `BooleanFilter` | `is`, `empty`*, `notEmpty`* |
+| `DateFilter` | `dateRange`, `notInDateRange`, `empty`*, `notEmpty`* |
 
 \* Only when `nullable()` returns `true`
 

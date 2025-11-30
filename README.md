@@ -10,7 +10,7 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 ## Features
 
 - **6 Filter Types**: Boolean, Integer, Text, Select, Date, Decimal filters
-- **19 Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GT, LT, BETWEEN, REGEX, EMPTY, DATE_RANGE, and more
+- **18 Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GT, LT, BETWEEN, REGEX, EMPTY, DATE_RANGE, and more
 - **AND/OR Logic**: Complex nested filter groups with FilterSelection
 - **Relation Filtering**: Filter through Eloquent relationships with `whereHas()`
 - **Collection Filtering**: Apply the same filter logic to in-memory Collections
