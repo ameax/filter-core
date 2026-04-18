@@ -231,6 +231,37 @@ class MatchModesTest extends TestCase
     }
 
     /**
+     * CONTAINS_ALL Mode: All whitespace-separated tokens must be contained.
+     *
+     * SQL: WHERE (column LIKE '%token1%' AND column LIKE '%token2%' ...)
+     */
+    public function test_contains_all_mode(): void
+    {
+        // Two tokens, both present in the same name
+        $result = Koi::query()
+            ->applyFilter(FilterValue::for(KoiNameFilter::class)->containsAll('Sh wa'))
+            ->get();
+
+        $this->assertCount(1, $result);
+        $this->assertEquals('Showa', $result->first()->name);
+
+        // Tokens not all present → no match
+        $result = Koi::query()
+            ->applyFilter(FilterValue::for(KoiNameFilter::class)->containsAll('Sh xx'))
+            ->get();
+
+        $this->assertCount(0, $result);
+
+        // Single token behaves like contains
+        $result = Koi::query()
+            ->applyFilter(FilterValue::for(KoiNameFilter::class)->containsAll('Sh'))
+            ->get();
+
+        $this->assertCount(2, $result);
+        $this->assertEquals(['Showa', 'Shusui'], $result->pluck('name')->sort()->values()->all());
+    }
+
+    /**
      * STARTS_WITH Mode: Text starts with prefix.
      *
      * SQL: WHERE column LIKE 'value%'

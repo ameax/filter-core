@@ -134,6 +134,16 @@ final class FilterValueBuilder
     }
 
     /**
+     * CONTAINS_ALL match mode.
+     *
+     * Every whitespace-separated token in $value must be contained in the column.
+     */
+    public function containsAll(string $value): FilterValue|FilterSelection
+    {
+        return $this->mode(MatchMode::containsAll())->value($value);
+    }
+
+    /**
      * EMPTY match mode.
      */
     public function empty(): FilterValue|FilterSelection

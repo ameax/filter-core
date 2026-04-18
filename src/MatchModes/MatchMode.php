@@ -16,6 +16,7 @@ use InvalidArgumentException;
  * @method static IsMatchMode is()
  * @method static IsNotMatchMode isNot()
  * @method static ContainsMatchMode contains()
+ * @method static ContainsAllMatchMode containsAll()
  * @method static StartsWithMatchMode startsWith()
  * @method static EndsWithMatchMode endsWith()
  * @method static AnyMatchMode any()
@@ -157,6 +158,7 @@ class MatchMode
             'is' => IsMatchMode::class,
             'isNot' => IsNotMatchMode::class,
             'contains' => ContainsMatchMode::class,
+            'containsAll' => ContainsAllMatchMode::class,
             'startsWith' => StartsWithMatchMode::class,
             'endsWith' => EndsWithMatchMode::class,
             'any' => AnyMatchMode::class,
@@ -176,6 +178,7 @@ class MatchMode
             'not_empty' => NotEmptyMatchMode::class,
             'starts_with' => StartsWithMatchMode::class,
             'ends_with' => EndsWithMatchMode::class,
+            'contains_all' => ContainsAllMatchMode::class,
         ], self::$modes);
     }
 }

@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\Filters;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicTextFilter;
+use Ameax\FilterCore\MatchModes\ContainsAllMatchMode;
 use Ameax\FilterCore\MatchModes\ContainsMatchMode;
 use Ameax\FilterCore\MatchModes\EndsWithMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
@@ -41,6 +42,7 @@ abstract class TextFilter extends Filter
     {
         return [
             new ContainsMatchMode,
+            new ContainsAllMatchMode,
             new StartsWithMatchMode,
             new EndsWithMatchMode,
             new RegexMatchMode,
