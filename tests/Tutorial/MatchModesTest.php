@@ -262,6 +262,26 @@ class MatchModesTest extends TestCase
     }
 
     /**
+     * TextFilter also permits EMPTY / NOT_EMPTY modes without tripping the
+     * required-value validation. Koi.name is non-nullable so empty() returns
+     * nothing and notEmpty() returns every row.
+     */
+    public function test_text_filter_allows_empty_and_not_empty_modes(): void
+    {
+        $empty = Koi::query()
+            ->applyFilter(FilterValue::for(KoiNameFilter::class)->empty())
+            ->get();
+
+        $this->assertCount(0, $empty);
+
+        $notEmpty = Koi::query()
+            ->applyFilter(FilterValue::for(KoiNameFilter::class)->notEmpty())
+            ->get();
+
+        $this->assertCount(5, $notEmpty);
+    }
+
+    /**
      * STARTS_WITH Mode: Text starts with prefix.
      *
      * SQL: WHERE column LIKE 'value%'
