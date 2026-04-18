@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Foundation\Auth\User;
+
 // config for Ameax/FilterCore
 return [
 
@@ -13,7 +15,7 @@ return [
     |
     */
 
-    'user_model' => \Illuminate\Foundation\Auth\User::class,
+    'user_model' => User::class,
 
     /*
     |--------------------------------------------------------------------------

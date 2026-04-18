@@ -9,6 +9,7 @@ use Ameax\FilterCore\DateRange\DateRangeValue;
 use Ameax\FilterCore\DateRange\ResolvedDateRange;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -22,8 +23,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $direction
  * @property int $sort_order
  * @property bool $is_active
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  * @property-read string $label Auto-generated label
  * @property-read DateRangeValue $date_range_value
  */
@@ -191,9 +192,9 @@ class QuickFilterPreset extends Model
      *
      * @param  array<string>  $scopes
      * @param  array<DateDirection>|null  $allowedDirections
-     * @return \Illuminate\Database\Eloquent\Collection<int, static>
+     * @return Collection<int, static>
      */
-    public static function getForFilter(array $scopes = [], ?array $allowedDirections = null): \Illuminate\Database\Eloquent\Collection
+    public static function getForFilter(array $scopes = [], ?array $allowedDirections = null): Collection
     {
         return static::query()
             ->active()

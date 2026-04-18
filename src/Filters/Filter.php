@@ -6,6 +6,8 @@ namespace Ameax\FilterCore\Filters;
 
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Data\FilterDefinition;
+use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\Data\FilterValueBuilder;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicFilter;
@@ -142,9 +144,9 @@ abstract class Filter
      * @example KoiStatusFilter::value()->is('active')
      * @example KoiCountFilter::value()->greaterThan(10)
      */
-    public static function value(): \Ameax\FilterCore\Data\FilterValueBuilder
+    public static function value(): FilterValueBuilder
     {
-        return \Ameax\FilterCore\Data\FilterValue::for(static::class);
+        return FilterValue::for(static::class);
     }
 
     /**

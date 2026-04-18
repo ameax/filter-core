@@ -11,6 +11,8 @@ use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
 use Ameax\FilterCore\Tests\TestCase;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 
 class FilterSelectionTest extends TestCase
 {
@@ -446,7 +448,7 @@ class FilterSelectionTest extends TestCase
 
         $query = $selection->query();
 
-        $this->assertInstanceOf(\Illuminate\Database\Eloquent\Builder::class, $query);
+        $this->assertInstanceOf(Builder::class, $query);
     }
 
     public function test_query_applies_filters(): void
@@ -470,7 +472,7 @@ class FilterSelectionTest extends TestCase
 
         $results = $selection->execute();
 
-        $this->assertInstanceOf(\Illuminate\Support\Collection::class, $results);
+        $this->assertInstanceOf(Collection::class, $results);
         $this->assertCount(2, $results);
     }
 

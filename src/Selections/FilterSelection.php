@@ -10,6 +10,9 @@ use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use JsonSerializable;
 
 /**
@@ -432,7 +435,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Get a query builder for this selection.
      *
-     * @return \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>
+     * @return Builder<Model>
      *
      * @throws \LogicException if no model class is set
      *
@@ -441,7 +444,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * $query = $selection->query();
      * $results = $query->paginate(20);
      */
-    public function query(): \Illuminate\Database\Eloquent\Builder
+    public function query(): Builder
     {
         if ($this->modelClass === null) {
             throw new \LogicException('Cannot create query without a model class. Use forModel() to set one.');
@@ -457,7 +460,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Execute this selection and return results.
      *
-     * @return \Illuminate\Support\Collection<int, \Illuminate\Database\Eloquent\Model>
+     * @return Collection<int, Model>
      *
      * @throws \LogicException if no model class is set
      *
@@ -465,7 +468,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * $selection = FilterSelection::fromJson($json);
      * $results = $selection->execute();
      */
-    public function execute(): \Illuminate\Support\Collection
+    public function execute(): Collection
     {
         return $this->query()->get();
     }
@@ -532,7 +535,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Get the SQL query string for this selection.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     * @param  Builder<Model>|null  $query
      *
      * @throws \LogicException if no model class is set and no query provided
      *
@@ -540,7 +543,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * $selection->toSql();
      * // → "select * from `kois` where `status` = ? and `count` > ?"
      */
-    public function toSql(?\Illuminate\Database\Eloquent\Builder $query = null): string
+    public function toSql(?Builder $query = null): string
     {
         $query = $this->resolveQueryForDebug($query);
 
@@ -553,7 +556,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * Note: This is for debugging only. Never use this for actual queries
      * as it may be vulnerable to SQL injection.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     * @param  Builder<Model>|null  $query
      *
      * @throws \LogicException if no model class is set and no query provided
      *
@@ -561,7 +564,7 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * $selection->toSqlWithBindings();
      * // → "select * from `kois` where `status` = 'active' and `count` > 10"
      */
-    public function toSqlWithBindings(?\Illuminate\Database\Eloquent\Builder $query = null): string
+    public function toSqlWithBindings(?Builder $query = null): string
     {
         $query = $this->resolveQueryForDebug($query);
 
@@ -601,10 +604,10 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Dump SQL and bindings for debugging.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     * @param  Builder<Model>|null  $query
      * @return array{sql: string, sql_with_bindings: string, bindings: array<mixed>, filters: array<string>, explanation: string}
      */
-    public function debug(?\Illuminate\Database\Eloquent\Builder $query = null): array
+    public function debug(?Builder $query = null): array
     {
         $query = $this->resolveQueryForDebug($query);
 
@@ -620,11 +623,11 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Dump and die (for debugging).
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
+     * @param  Builder<Model>|null  $query
      *
      * @codeCoverageIgnore
      */
-    public function dd(?\Illuminate\Database\Eloquent\Builder $query = null): never
+    public function dd(?Builder $query = null): never
     {
         dd($this->debug($query));
     }
@@ -632,10 +635,10 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Resolve a query for debugging.
      *
-     * @param  \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>|null  $query
-     * @return \Illuminate\Database\Eloquent\Builder<\Illuminate\Database\Eloquent\Model>
+     * @param  Builder<Model>|null  $query
+     * @return Builder<Model>
      */
-    protected function resolveQueryForDebug(?\Illuminate\Database\Eloquent\Builder $query): \Illuminate\Database\Eloquent\Builder
+    protected function resolveQueryForDebug(?Builder $query): Builder
     {
         if ($query !== null) {
             // @phpstan-ignore method.notFound (applySelection is added by Filterable trait)

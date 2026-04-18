@@ -311,7 +311,7 @@ class DynamicFilterTest extends TestCase
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([
                 $dynamicFilter,
-                \Ameax\FilterCore\Tests\Filters\KoiCountFilter::class,
+                KoiCountFilter::class,
             ])
             ->applyFilters([
                 new FilterValue('custom_status', new IsMatchMode, 'active'),

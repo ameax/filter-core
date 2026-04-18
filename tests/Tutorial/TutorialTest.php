@@ -5,20 +5,30 @@ namespace Ameax\FilterCore\Tests\Tutorial;
 use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\DateRange\DateDirection;
+use Ameax\FilterCore\DateRange\DateRangeOptions;
+use Ameax\FilterCore\DateRange\DateRangeValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
+use Ameax\FilterCore\Filters\DateFilter;
+use Ameax\FilterCore\Filters\DecimalFilter;
 use Ameax\FilterCore\Filters\IntegerFilter;
 use Ameax\FilterCore\Filters\SelectFilter;
 use Ameax\FilterCore\MatchModes\BetweenMatchMode;
+use Ameax\FilterCore\MatchModes\DateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\GreaterThanMatchMode;
+use Ameax\FilterCore\MatchModes\GreaterThanOrEqualMatchMode;
 use Ameax\FilterCore\MatchModes\IsMatchMode;
 use Ameax\FilterCore\MatchModes\MatchMode;
+use Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Ameax\FilterCore\Tests\Filters\KoiActiveFilter;
 use Ameax\FilterCore\Tests\Filters\KoiCountFilter;
+use Ameax\FilterCore\Tests\Filters\KoiPriceFilter;
 use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
+use Ameax\FilterCore\Tests\Filters\KoiWeightFilter;
 use Ameax\FilterCore\Tests\Filters\PondCapacityFilter;
 use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
@@ -347,7 +357,7 @@ class TutorialTest extends TestCase
      * - Reusable across the application
      * - Can have custom logic
      *
-     * @see \Ameax\FilterCore\Tests\Filters\KoiStatusFilter
+     * @see KoiStatusFilter
      */
     public function test_4_1_static_filter_class(): void
     {
@@ -1683,8 +1693,8 @@ class TutorialTest extends TestCase
     {
         // Filter koi by exact weight
         $result = QueryApplicator::for(Koi::query())
-            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
-            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->is(3.75))
+            ->withFilters([KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(KoiWeightFilter::class)->is(3.75))
             ->getQuery()
             ->get();
 
@@ -1699,8 +1709,8 @@ class TutorialTest extends TestCase
     {
         // Find koi heavier than 3kg
         $result = QueryApplicator::for(Koi::query())
-            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
-            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->gt(3.0))
+            ->withFilters([KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(KoiWeightFilter::class)->gt(3.0))
             ->getQuery()
             ->get();
 
@@ -1716,8 +1726,8 @@ class TutorialTest extends TestCase
     {
         // Find koi between 1.0 and 3.0 kg
         $result = QueryApplicator::for(Koi::query())
-            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
-            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->between(1.0, 3.0))
+            ->withFilters([KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(KoiWeightFilter::class)->between(1.0, 3.0))
             ->getQuery()
             ->get();
 
@@ -1736,8 +1746,8 @@ class TutorialTest extends TestCase
     {
         // User searches for $49.99, filter converts to 4999 cents
         $result = QueryApplicator::for(Koi::query())
-            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class])
-            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class)->is(49.99))
+            ->withFilters([KoiPriceFilter::class])
+            ->applyFilter(FilterValue::for(KoiPriceFilter::class)->is(49.99))
             ->getQuery()
             ->get();
 
@@ -1754,8 +1764,8 @@ class TutorialTest extends TestCase
         // Find koi priced between $30 and $80
         // Filter converts: 30.00 → 3000, 80.00 → 8000
         $result = QueryApplicator::for(Koi::query())
-            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class])
-            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiPriceFilter::class)->between(30.00, 80.00))
+            ->withFilters([KoiPriceFilter::class])
+            ->applyFilter(FilterValue::for(KoiPriceFilter::class)->between(30.00, 80.00))
             ->getQuery()
             ->get();
 
@@ -1770,7 +1780,7 @@ class TutorialTest extends TestCase
     public function test_14_6_dynamic_decimal_filter(): void
     {
         // Create decimal filter at runtime
-        $weightFilter = \Ameax\FilterCore\Filters\DecimalFilter::dynamic('weight')
+        $weightFilter = DecimalFilter::dynamic('weight')
             ->withColumn('weight')
             ->withLabel('Weight (kg)')
             ->withPrecision(2)
@@ -1779,7 +1789,7 @@ class TutorialTest extends TestCase
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$weightFilter])
-            ->applyFilter(new FilterValue('weight', new \Ameax\FilterCore\MatchModes\GreaterThanOrEqualMatchMode, 3.0))
+            ->applyFilter(new FilterValue('weight', new GreaterThanOrEqualMatchMode, 3.0))
             ->getQuery()
             ->get();
 
@@ -1793,7 +1803,7 @@ class TutorialTest extends TestCase
     public function test_14_7_dynamic_decimal_stored_as_integer(): void
     {
         // Create price filter that stores as cents
-        $priceFilter = \Ameax\FilterCore\Filters\DecimalFilter::dynamic('price')
+        $priceFilter = DecimalFilter::dynamic('price')
             ->withColumn('price_cents')
             ->withLabel('Price')
             ->withPrecision(2)
@@ -1802,7 +1812,7 @@ class TutorialTest extends TestCase
         // Filter for prices > $50
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$priceFilter])
-            ->applyFilter(new FilterValue('price', new \Ameax\FilterCore\MatchModes\GreaterThanMatchMode, 50.00))
+            ->applyFilter(new FilterValue('price', new GreaterThanMatchMode, 50.00))
             ->getQuery()
             ->get();
 
@@ -1816,7 +1826,7 @@ class TutorialTest extends TestCase
      */
     public function test_14_8_decimal_sanitization(): void
     {
-        $filter = new \Ameax\FilterCore\Tests\Filters\KoiWeightFilter;
+        $filter = new KoiWeightFilter;
         $mode = new IsMatchMode;
 
         // String input converted to float
@@ -1838,8 +1848,8 @@ class TutorialTest extends TestCase
         $collection = Koi::all();
 
         $filtered = CollectionApplicator::for($collection)
-            ->withFilters([\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class])
-            ->applyFilter(FilterValue::for(\Ameax\FilterCore\Tests\Filters\KoiWeightFilter::class)->lte(2.0))
+            ->withFilters([KoiWeightFilter::class])
+            ->applyFilter(FilterValue::for(KoiWeightFilter::class)->lte(2.0))
             ->getCollection();
 
         // Sanke (1.25), Shusui (0.50) <= 2kg
@@ -1862,15 +1872,15 @@ class TutorialTest extends TestCase
      */
     public function test_15_1_date_filter_quick_selection(): void
     {
-        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+        $filter = DateFilter::dynamic('created')
             ->withColumn('created_at')
             ->withLabel('Created Date');
 
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::thisMonth();
+        $range = DateRangeValue::thisMonth();
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->applyFilter(new FilterValue('created', new DateRangeMatchMode, $range))
             ->getQuery()
             ->get();
 
@@ -1885,14 +1895,14 @@ class TutorialTest extends TestCase
      */
     public function test_15_2_date_filter_relative_range(): void
     {
-        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+        $filter = DateFilter::dynamic('created')
             ->withColumn('created_at');
 
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::lastDays(30);
+        $range = DateRangeValue::lastDays(30);
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->applyFilter(new FilterValue('created', new DateRangeMatchMode, $range))
             ->getQuery()
             ->get();
 
@@ -1904,18 +1914,18 @@ class TutorialTest extends TestCase
      */
     public function test_15_3_date_filter_custom_range(): void
     {
-        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+        $filter = DateFilter::dynamic('created')
             ->withColumn('created_at');
 
         // Custom range from January 1 to December 31 this year
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::between(
+        $range = DateRangeValue::between(
             now()->startOfYear()->toDateString(),
             now()->endOfYear()->toDateString()
         );
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->applyFilter(new FilterValue('created', new DateRangeMatchMode, $range))
             ->getQuery()
             ->get();
 
@@ -1929,15 +1939,15 @@ class TutorialTest extends TestCase
      */
     public function test_15_4_date_filter_not_in_range(): void
     {
-        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+        $filter = DateFilter::dynamic('created')
             ->withColumn('created_at');
 
         // Find records NOT from last year
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::lastYear();
+        $range = DateRangeValue::lastYear();
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode, $range))
+            ->applyFilter(new FilterValue('created', new NotInDateRangeMatchMode, $range))
             ->getQuery()
             ->get();
 
@@ -1952,16 +1962,16 @@ class TutorialTest extends TestCase
      */
     public function test_15_5_date_filter_specific_period(): void
     {
-        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+        $filter = DateFilter::dynamic('created')
             ->withColumn('created_at');
 
         // Get current quarter
         $currentQuarter = (int) ceil(now()->month / 3);
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::quarter($currentQuarter, yearOffset: 0);
+        $range = DateRangeValue::quarter($currentQuarter, yearOffset: 0);
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->applyFilter(new FilterValue('created', new DateRangeMatchMode, $range))
             ->getQuery()
             ->get();
 
@@ -1973,16 +1983,16 @@ class TutorialTest extends TestCase
      */
     public function test_15_6_date_filter_half_year(): void
     {
-        $filter = \Ameax\FilterCore\Filters\DateFilter::dynamic('created')
+        $filter = DateFilter::dynamic('created')
             ->withColumn('created_at');
 
         // Get current half year (H1 or H2)
         $currentHalf = now()->month <= 6 ? 1 : 2;
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::halfYear($currentHalf, yearOffset: 0);
+        $range = DateRangeValue::halfYear($currentHalf, yearOffset: 0);
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
-            ->applyFilter(new FilterValue('created', new \Ameax\FilterCore\MatchModes\DateRangeMatchMode, $range))
+            ->applyFilter(new FilterValue('created', new DateRangeMatchMode, $range))
             ->getQuery()
             ->get();
 
@@ -1996,21 +2006,21 @@ class TutorialTest extends TestCase
      */
     public function test_15_7_date_filter_direction_restriction(): void
     {
-        $pastOnlyFilter = \Ameax\FilterCore\Filters\DateFilter::dynamic('birth_date')
+        $pastOnlyFilter = DateFilter::dynamic('birth_date')
             ->withColumn('created_at')
             ->withPastOnly();
 
         $this->assertEquals(
-            [\Ameax\FilterCore\DateRange\DateDirection::PAST],
+            [DateDirection::PAST],
             $pastOnlyFilter->allowedDirections()
         );
 
-        $futureOnlyFilter = \Ameax\FilterCore\Filters\DateFilter::dynamic('due_date')
+        $futureOnlyFilter = DateFilter::dynamic('due_date')
             ->withColumn('due_at')
             ->withFutureOnly();
 
         $this->assertEquals(
-            [\Ameax\FilterCore\DateRange\DateDirection::FUTURE],
+            [DateDirection::FUTURE],
             $futureOnlyFilter->allowedDirections()
         );
     }
@@ -2020,13 +2030,13 @@ class TutorialTest extends TestCase
      */
     public function test_15_8_date_range_serialization(): void
     {
-        $original = \Ameax\FilterCore\DateRange\DateRangeValue::lastDays(30);
+        $original = DateRangeValue::lastDays(30);
 
         // Serialize to JSON
         $json = json_encode($original->toArray());
 
         // Deserialize
-        $restored = \Ameax\FilterCore\DateRange\DateRangeValue::fromArray(json_decode($json, true));
+        $restored = DateRangeValue::fromArray(json_decode($json, true));
 
         // Both should resolve to same dates
         $originalResolved = $original->resolve();
@@ -2047,7 +2057,7 @@ class TutorialTest extends TestCase
      */
     public function test_15_9_quick_date_range_options(): void
     {
-        $options = \Ameax\FilterCore\DateRange\DateRangeOptions::getQuickOptions();
+        $options = DateRangeOptions::getQuickOptions();
 
         // Should have many predefined options
         $this->assertArrayHasKey('today', $options);
@@ -2068,7 +2078,7 @@ class TutorialTest extends TestCase
     public function test_15_10_date_expression(): void
     {
         // PHP DateTime natural language works
-        $range = \Ameax\FilterCore\DateRange\DateRangeValue::expression('first day of this month');
+        $range = DateRangeValue::expression('first day of this month');
         $resolved = $range->resolve();
 
         $this->assertEquals(

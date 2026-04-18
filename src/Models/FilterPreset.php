@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Ameax\FilterCore\Models;
 
 use Ameax\FilterCore\Selections\FilterSelection;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Foundation\Auth\User;
 
 /**
  * FilterPreset - Persistable filter configurations
@@ -18,8 +21,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property array<string, mixed> $configuration
  * @property int|null $user_id
  * @property bool $is_public
- * @property \Carbon\Carbon $created_at
- * @property \Carbon\Carbon $updated_at
+ * @property Carbon $created_at
+ * @property Carbon $updated_at
  */
 class FilterPreset extends Model
 {
@@ -173,13 +176,13 @@ class FilterPreset extends Model
     /**
      * Get the user who owns this preset.
      *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo<\Illuminate\Database\Eloquent\Model, $this>
+     * @return BelongsTo<Model, $this>
      */
-    public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    public function user(): BelongsTo
     {
         // Use config for User model to allow customization
-        /** @var class-string<\Illuminate\Database\Eloquent\Model> $userModel */
-        $userModel = config('filter-core.user_model', \Illuminate\Foundation\Auth\User::class);
+        /** @var class-string<Model> $userModel */
+        $userModel = config('filter-core.user_model', User::class);
 
         return $this->belongsTo($userModel);
     }

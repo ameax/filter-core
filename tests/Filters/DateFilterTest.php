@@ -5,6 +5,7 @@ namespace Ameax\FilterCore\Tests\Filters;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\DateRange\DateDirection;
 use Ameax\FilterCore\DateRange\DateRangeValue;
+use Ameax\FilterCore\DateRange\DateUnit;
 use Ameax\FilterCore\DateRange\ResolvedDateRange;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\DateFilter;
@@ -280,7 +281,7 @@ class DateFilterTest extends TestCase
     public function test_filter_older_than(): void
     {
         $filter = KoiBirthDateFilter::make();
-        $range = DateRangeValue::olderThan(60, \Ameax\FilterCore\DateRange\DateUnit::DAY);
+        $range = DateRangeValue::olderThan(60, DateUnit::DAY);
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])
@@ -297,7 +298,7 @@ class DateFilterTest extends TestCase
     public function test_filter_newer_than(): void
     {
         $filter = KoiBirthDateFilter::make();
-        $range = DateRangeValue::newerThan(30, \Ameax\FilterCore\DateRange\DateUnit::DAY);
+        $range = DateRangeValue::newerThan(30, DateUnit::DAY);
 
         $result = QueryApplicator::for(Koi::query())
             ->withFilters([$filter])

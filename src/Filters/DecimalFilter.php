@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ameax\FilterCore\Filters;
 
 use Ameax\FilterCore\Contracts\MatchModeContract;
+use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicDecimalFilter;
 use Ameax\FilterCore\MatchModes\AnyMatchMode;
@@ -120,8 +121,8 @@ abstract class DecimalFilter extends Filter
         }
 
         // Handle BetweenValue object
-        if ($value instanceof \Ameax\FilterCore\Data\BetweenValue) {
-            return new \Ameax\FilterCore\Data\BetweenValue(
+        if ($value instanceof BetweenValue) {
+            return new BetweenValue(
                 $this->sanitizeSingleValue($value->min),
                 $this->sanitizeSingleValue($value->max)
             );
@@ -198,7 +199,7 @@ abstract class DecimalFilter extends Filter
     protected function convertToStorageFormat(mixed $value, MatchModeContract $mode): mixed
     {
         // Handle BetweenValue
-        if ($value instanceof \Ameax\FilterCore\Data\BetweenValue) {
+        if ($value instanceof BetweenValue) {
             return [
                 'min' => $this->toStorageValue($value->min),
                 'max' => $this->toStorageValue($value->max),
