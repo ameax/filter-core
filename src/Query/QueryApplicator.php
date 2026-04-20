@@ -12,6 +12,7 @@ use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
+use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Illuminate\Database\Eloquent\Builder;
@@ -495,6 +496,18 @@ final class QueryApplicator
         MatchModeContract $matchMode,
         mixed $value
     ): void {
+        // "none of" on a HAS relation must invert: use whereDoesntHave
+        // with a positive whereIn, so records having any of the specified
+        // related values are excluded.
+        if ($matchMode instanceof NoneMatchMode && $mode === RelationModeEnum::HAS) {
+            $query->whereDoesntHave($relation, function (Builder $relQuery) use ($column, $value): void {
+                $values = is_array($value) ? $value : [$value];
+                $relQuery->whereIn($column, $values);
+            });
+
+            return;
+        }
+
         $callback = function (Builder $relQuery) use ($column, $matchMode, $value): void {
             $matchMode->apply($relQuery, $column, $value);
         };
