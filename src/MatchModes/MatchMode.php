@@ -172,6 +172,8 @@ class MatchMode
             'regex' => RegexMatchMode::class,
             'empty' => EmptyMatchMode::class,
             'notEmpty' => NotEmptyMatchMode::class,
+            'dateRange' => DateRangeMatchMode::class,
+            'notInDateRange' => NotInDateRangeMatchMode::class,
 
             // Snake_case aliases for JSON compatibility
             'is_not' => IsNotMatchMode::class,
@@ -179,6 +181,8 @@ class MatchMode
             'starts_with' => StartsWithMatchMode::class,
             'ends_with' => EndsWithMatchMode::class,
             'contains_all' => ContainsAllMatchMode::class,
+            'date_range' => DateRangeMatchMode::class,
+            'not_in_date_range' => NotInDateRangeMatchMode::class,
         ], self::$modes);
     }
 }

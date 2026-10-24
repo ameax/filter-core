@@ -361,7 +361,11 @@ final class QueryApplicator
             return $this;
         }
 
-        $this->applyGroup($this->query, $selection->getGroup());
+        // Always one parenthesised group: an OR selection applied straight onto a
+        // query that already has conditions would read "a AND b OR c" and bypass them.
+        $this->query->where(function (Builder|QueryBuilder $q) use ($selection): void {
+            $this->applyGroup($q, $selection->getGroup());
+        });
 
         return $this;
     }

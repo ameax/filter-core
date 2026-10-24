@@ -318,6 +318,10 @@ class MatchModesTest extends TestCase
      */
     public function test_regex_mode(): void
     {
+        if (\Illuminate\Support\Facades\DB::connection()->getDriverName() === 'sqlsrv') {
+            $this->markTestSkipped('SQL Server has no regular expressions; see tests/Regression.');
+        }
+
         // Match names starting with S
         $result = Koi::query()
             ->applyFilter(FilterValue::for(KoiNameFilter::class)->regex('^S'))

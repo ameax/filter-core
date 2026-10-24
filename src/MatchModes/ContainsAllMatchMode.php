@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ameax\FilterCore\MatchModes;
 
 use Ameax\FilterCore\Contracts\MatchModeContract;
+use Ameax\FilterCore\Query\SqlDialect;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -34,7 +35,7 @@ class ContainsAllMatchMode implements MatchModeContract
 
         $query->where(function ($query) use ($column, $tokens): void {
             foreach ($tokens as $token) {
-                $query->where($column, 'like', '%'.$token.'%');
+                SqlDialect::whereLike($query, $column, '%'.SqlDialect::escapeLike($token).'%');
             }
         });
     }

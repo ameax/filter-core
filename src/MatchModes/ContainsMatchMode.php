@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ameax\FilterCore\MatchModes;
 
 use Ameax\FilterCore\Contracts\MatchModeContract;
+use Ameax\FilterCore\Query\SqlDialect;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
@@ -21,7 +22,7 @@ class ContainsMatchMode implements MatchModeContract
 
     public function apply(Builder|QueryBuilder $query, string $column, mixed $value): void
     {
-        $query->where($column, 'like', '%'.$value.'%');
+        SqlDialect::whereLike($query, $column, '%'.SqlDialect::escapeLike((string) $value).'%');
     }
 
     public function applyToCollection(Collection $collection, string $column, mixed $value): Collection

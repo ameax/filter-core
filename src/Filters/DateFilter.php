@@ -13,6 +13,7 @@ use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicDateFilter;
 use Ameax\FilterCore\MatchModes\DateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode;
+use Ameax\FilterCore\Query\SqlDialect;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -133,6 +134,16 @@ abstract class DateFilter extends Filter
         } elseif ($resolved->start !== null && $resolved->end === null) {
             $operator = $isNot ? '<' : '>=';
             $query->where($column, $operator, $resolved->start->toDateTimeString());
+        }
+
+        // Every branch that compares "lower than" lets the zero date of legacy MySQL
+        // schemas through, because it sorts before every real date. It means "no date",
+        // so it is excluded like NULL.
+        $comparesLower = ($resolved->start === null && $resolved->end !== null && ! $isNot)
+            || ($resolved->start !== null && $resolved->end !== null && $isNot)
+            || ($resolved->start !== null && $resolved->end === null && $isNot);
+        if ($comparesLower) {
+            SqlDialect::excludeZeroDates($query, $column);
         }
 
         return true;

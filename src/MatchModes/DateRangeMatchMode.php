@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\MatchModes;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\DateRange\DateRangeValue;
 use Ameax\FilterCore\DateRange\ResolvedDateRange;
+use Ameax\FilterCore\Query\SqlDialect;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -43,8 +44,10 @@ class DateRangeMatchMode implements MatchModeContract
                 $resolved->end->toDateTimeString(),
             ]);
         } elseif ($resolved->start === null && $resolved->end !== null) {
-            // Open start: column <= end
+            // Open start: column <= end. The zero date of legacy MySQL schemas
+            // would sort before every real date, so it is excluded like NULL.
             $query->where($column, '<=', $resolved->end->toDateTimeString());
+            SqlDialect::excludeZeroDates($query, $column);
         } elseif ($resolved->start !== null && $resolved->end === null) {
             // Open end: column >= start
             $query->where($column, '>=', $resolved->start->toDateTimeString());

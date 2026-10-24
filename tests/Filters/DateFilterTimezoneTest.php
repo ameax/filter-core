@@ -213,6 +213,7 @@ class DateFilterTimezoneTest extends TestCase
         $mode = new NotInDateRangeMatchMode;
 
         $query = Mockery::mock(Builder::class);
+        $this->withoutZeroDates($query);
         $query->shouldReceive('whereNotBetween')
             ->once()
             ->withArgs(function ($column, $values) {
@@ -262,6 +263,7 @@ class DateFilterTimezoneTest extends TestCase
         $mode = new DateRangeMatchMode;
 
         $query = Mockery::mock(Builder::class);
+        $this->withoutZeroDates($query);
         $query->shouldReceive('where')
             ->once()
             ->withArgs(function ($column, $operator, $value) {
@@ -342,5 +344,19 @@ class DateFilterTimezoneTest extends TestCase
             ->withTime();
 
         $this->assertTrue($filter->meta()['hasTime']);
+    }
+
+    /**
+     * These branches compare "lower than", where MySQL also excludes the zero date
+     * (covered in tests/Regression). Report a driver without zero dates, so the
+     * mock only sees the range condition under test.
+     */
+    private function withoutZeroDates(Mockery\MockInterface $query): void
+    {
+        $connection = Mockery::mock(\Illuminate\Database\Connection::class);
+        $connection->shouldReceive('getDriverName')->andReturn('sqlite');
+        $base = Mockery::mock(\Illuminate\Database\Query\Builder::class);
+        $base->shouldReceive('getConnection')->andReturn($connection);
+        $query->shouldReceive('getQuery')->andReturn($base);
     }
 }

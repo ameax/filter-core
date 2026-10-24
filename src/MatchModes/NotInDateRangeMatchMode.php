@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\MatchModes;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\DateRange\DateRangeValue;
 use Ameax\FilterCore\DateRange\ResolvedDateRange;
+use Ameax\FilterCore\Query\SqlDialect;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -38,12 +39,15 @@ class NotInDateRangeMatchMode implements MatchModeContract
                 $q->where($column, '<', $resolved->start->toDateTimeString())
                     ->orWhere($column, '>', $resolved->end->toDateTimeString());
             });
+            // A zero date is "no date" (like NULL), not a date before the range.
+            SqlDialect::excludeZeroDates($query, $column);
         } elseif ($resolved->start === null && $resolved->end !== null) {
             // Open start (original: <= end), inverse: > end
             $query->where($column, '>', $resolved->end->toDateTimeString());
         } elseif ($resolved->start !== null && $resolved->end === null) {
             // Open end (original: >= start), inverse: < start
             $query->where($column, '<', $resolved->start->toDateTimeString());
+            SqlDialect::excludeZeroDates($query, $column);
         } else {
             // Unbounded: original matches everything, inverse matches nothing
             // We handle this by adding an impossible condition
