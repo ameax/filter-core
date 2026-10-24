@@ -24,6 +24,7 @@ use Ameax\FilterCore\Selections\FilterSelection;
  * - Strict: any finding throws SelectionNotApplicableException with all findings.
  * - Lenient: the condition is left out, groups that end up empty are removed, and the
  *   findings are kept on the result for the caller to show or log.
+ * - Restrictive: the condition matches nothing (NeverFilter); findings are kept.
  *
  * What resolves is safe to apply: the applicators find nothing left to reject.
  */
@@ -34,6 +35,8 @@ final class Resolver
 
     /** @var array<string, FilterDefinition> */
     private array $definitions = [];
+
+    private bool $restrictive = false;
 
     /**
      * @param  array<class-string<Filter>|Filter>  $filters
@@ -63,6 +66,7 @@ final class Resolver
     {
         $context ??= FilterContext::strict();
         $diagnostics = new Diagnostics;
+        $this->restrictive = $context->policy === ResolutionPolicy::Restrictive;
 
         $root = $this->resolveGroup($selection->getGroup(), [], $diagnostics)
             ?? new FilterGroup($selection->getGroup()->getOperator());
@@ -74,7 +78,7 @@ final class Resolver
         return new ResolvedSelection(
             $selection->withGroup($root),
             $diagnostics,
-            array_values($this->filters),
+            [...array_values($this->filters), new NeverFilter],
             $context,
         );
     }
@@ -101,6 +105,9 @@ final class Resolver
             $diagnostic = $this->check($item, $itemPath);
             if ($diagnostic !== null) {
                 $diagnostics->add($diagnostic);
+                if ($this->restrictive) {
+                    $resolved->add(NeverFilter::condition());
+                }
 
                 continue;
             }

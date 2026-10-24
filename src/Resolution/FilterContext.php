@@ -32,6 +32,11 @@ final readonly class FilterContext
         return new self(ResolutionPolicy::Lenient);
     }
 
+    public static function restrictive(): self
+    {
+        return new self(ResolutionPolicy::Restrictive);
+    }
+
     public function withPolicy(ResolutionPolicy $policy): self
     {
         return new self($policy, $this->user, $this->timezone, $this->attributes);

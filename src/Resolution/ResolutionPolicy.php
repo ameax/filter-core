@@ -18,4 +18,13 @@ enum ResolutionPolicy: string
 
     /** The condition is left out, empty groups are removed, the diagnostic is kept. */
     case Lenient = 'lenient';
+
+    /**
+     * The condition matches nothing, the diagnostic is kept.
+     *
+     * Never widens the result: in an AND group the group matches nothing, in an OR
+     * group only that branch drops out. Use it where leaving a condition out would
+     * show records that the saved selection was meant to exclude.
+     */
+    case Restrictive = 'restrictive';
 }

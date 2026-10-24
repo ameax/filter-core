@@ -19,6 +19,9 @@ $resolved = Account::resolveSelection($selection);
 // Lenient: findings are left out and reported
 $resolved = Account::resolveSelection($selection, FilterContext::lenient());
 
+// Restrictive: findings match nothing, the result never gets wider
+$resolved = Account::resolveSelection($selection, FilterContext::restrictive());
+
 $accounts = $resolved->applyTo(Account::query())->get();
 
 if (! $resolved->isComplete()) {
@@ -32,11 +35,16 @@ The caller decides, not the selection. Use strict where a wrong result does harm
 example a job that deletes or exports records. Use lenient where a person looks at the
 result, for example a list that shows a hint.
 
-| | strict | lenient |
-|---|---|---|
-| condition cannot be applied | `SelectionNotApplicableException` with all findings | left out, finding kept |
-| group ends up empty | — | removed |
-| nothing left to filter by | — | `hasConditions()` is false, the query is unfiltered |
+| | strict | lenient | restrictive |
+|---|---|---|---|
+| condition cannot be applied | `SelectionNotApplicableException` with all findings | left out, finding kept | matches nothing, finding kept |
+| group ends up empty | — | removed | — |
+| nothing left to filter by | — | `hasConditions()` is false, the query is unfiltered | no records |
+
+Lenient can widen the result: leaving out a condition of an AND group lets more records
+through. Restrictive never does: in an AND group the group matches nothing, in an OR
+group only that branch drops out. Choose it where a stale condition must not show
+records the selection was meant to exclude, for example a list built on a saved search.
 
 ## What is checked
 

@@ -190,3 +190,33 @@ it('makes the non-strict scope tolerant for nested groups and deleted options', 
 it('applies with a strict context through the scope and throws on findings', function () {
     Koi::query()->applySelectionWith(resolverSelection(), FilterContext::strict())->get();
 })->throws(SelectionNotApplicableException::class);
+
+it('lets an unapplicable condition match nothing under the restrictive policy', function () {
+    $and = resolverData(['operator' => 'and', 'items' => [
+        ['filter' => 'KoiStatusFilter', 'mode' => 'is', 'value' => 'active'],
+        ['filter' => 'GoneFilter', 'mode' => 'is', 'value' => 'x'],
+    ]]);
+    $or = resolverData(['operator' => 'or', 'items' => [
+        ['filter' => 'KoiStatusFilter', 'mode' => 'is', 'value' => 'active'],
+        ['filter' => 'GoneFilter', 'mode' => 'is', 'value' => 'x'],
+    ]]);
+
+    $resolvedAnd = Resolver::for(Koi::getFilters())->resolve($and, FilterContext::restrictive());
+    $resolvedOr = Resolver::for(Koi::getFilters())->resolve($or, FilterContext::restrictive());
+
+    // Lenient would drop the condition and return every active koi for the AND group.
+    expect($resolvedAnd->applyTo(Koi::query())->count())->toBe(0)
+        ->and($resolvedOr->applyTo(Koi::query())->pluck('status')->all())->toBe(['active'])
+        ->and($resolvedAnd->diagnostics()->filterKeys())->toBe(['GoneFilter'])
+        ->and($resolvedAnd->isComplete())->toBeFalse();
+});
+
+it('never widens the result under the restrictive policy, also when nothing is left', function () {
+    $selection = resolverData(['operator' => 'and', 'items' => [
+        ['filter' => 'GoneFilter', 'mode' => 'is', 'value' => 'x'],
+    ]]);
+
+    $resolved = Resolver::for(Koi::getFilters())->resolve($selection, FilterContext::restrictive());
+
+    expect($resolved->applyTo(Koi::query())->count())->toBe(0);
+});
