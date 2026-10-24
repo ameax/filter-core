@@ -8,6 +8,7 @@ use Ameax\FilterCore\MatchModes\DateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode;
 use Ameax\FilterCore\Tests\TestCase;
 use Carbon\Carbon;
+use Illuminate\Database\Connection;
 use Illuminate\Database\Eloquent\Builder;
 use Mockery;
 
@@ -353,7 +354,7 @@ class DateFilterTimezoneTest extends TestCase
      */
     private function withoutZeroDates(Mockery\MockInterface $query): void
     {
-        $connection = Mockery::mock(\Illuminate\Database\Connection::class);
+        $connection = Mockery::mock(Connection::class);
         $connection->shouldReceive('getDriverName')->andReturn('sqlite');
         $base = Mockery::mock(\Illuminate\Database\Query\Builder::class);
         $base->shouldReceive('getConnection')->andReturn($connection);
