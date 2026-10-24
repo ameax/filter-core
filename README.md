@@ -21,6 +21,8 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 - **Value Validation**: Laravel validation rules with descriptive error messages
 - **Dynamic Filters**: Create filters at runtime without class definitions
 - **JSON Serialization**: Persist and restore filter configurations with optional model binding
+- **Resolution**: Check a selection before applying it, strict or lenient, with diagnostics for every condition that cannot be applied
+- **Context**: Pass user, time zone and application data to context-aware filters
 - **Debugging Tools**: SQL preview, bindings interpolation, human-readable explanations
 
 ## Installation
@@ -171,6 +173,7 @@ $selection->debug();
 | [Validation](docs/guides/08-validation-sanitization.md) | Input validation and sanitization |
 | [Advanced Usage](docs/guides/09-advanced-usage.md) | Custom logic and extensibility |
 | [Date Filter](docs/guides/10-date-filter.md) | Date filtering with timezone support |
+| [Resolution](docs/guides/11-resolution.md) | Strict and lenient checking, diagnostics, context |
 
 ## Quick Reference
 
@@ -374,6 +377,10 @@ return [
 
 ```bash
 composer test
+
+# against another database (default: mysql)
+DB_CONNECTION=mariadb composer test
+DB_CONNECTION=sqlsrv DB_PASSWORD=... composer test
 ```
 
 ## Changelog
