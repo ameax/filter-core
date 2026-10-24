@@ -63,22 +63,36 @@ jobs:
           extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, sqlite, pdo_sqlite, sqlsrv, pdo_sqlsrv, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
           coverage: none
 
+      - name: Install ODBC driver for SQL Server
+        if: matrix.db == 'sqlsrv'
+        run: |
+          if odbcinst -q -d 2>/dev/null | grep -q "ODBC Driver 18 for SQL Server"; then
+            echo "ODBC Driver 18 present"
+          else
+            curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+            curl -fsSL "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list" | sudo tee /etc/apt/sources.list.d/mssql-release.list
+            sudo apt-get update
+            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          fi
+
       - name: Create SQL Server database
         if: matrix.db == 'sqlsrv'
-        # SQL Server needs a few seconds after the container reports "started".
+        # SQL Server needs a while after the container reports "started".
         run: |
           php -r '
-            for ($i = 0; $i < 30; $i++) {
+            $error = "";
+            for ($i = 0; $i < 60; $i++) {
                 try {
                     $pdo = new PDO("sqlsrv:Server=127.0.0.1,1433;TrustServerCertificate=1", "sa", getenv("DB_PASSWORD"));
                     $pdo->exec("IF DB_ID(N'"'"'filter_core_testing'"'"') IS NULL CREATE DATABASE filter_core_testing");
                     echo "database ready\n";
                     exit(0);
                 } catch (Throwable $e) {
+                    $error = $e->getMessage();
                     sleep(2);
                 }
             }
-            fwrite(STDERR, "SQL Server not reachable\n");
+            fwrite(STDERR, "SQL Server not reachable: ".$error."\n");
             exit(1);
           '
 

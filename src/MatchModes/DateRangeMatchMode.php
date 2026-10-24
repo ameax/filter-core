@@ -48,7 +48,7 @@ class DateRangeMatchMode implements MatchModeContract
             // would sort before every real date, so it is excluded like NULL.
             $query->where($column, '<=', $resolved->end->toDateTimeString());
             SqlDialect::excludeZeroDates($query, $column);
-        } elseif ($resolved->start !== null && $resolved->end === null) {
+        } elseif ($resolved->start !== null) {
             // Open end: column >= start
             $query->where($column, '>=', $resolved->start->toDateTimeString());
         }

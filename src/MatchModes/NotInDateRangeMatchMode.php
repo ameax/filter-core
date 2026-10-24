@@ -44,7 +44,7 @@ class NotInDateRangeMatchMode implements MatchModeContract
         } elseif ($resolved->start === null && $resolved->end !== null) {
             // Open start (original: <= end), inverse: > end
             $query->where($column, '>', $resolved->end->toDateTimeString());
-        } elseif ($resolved->start !== null && $resolved->end === null) {
+        } elseif ($resolved->start !== null) {
             // Open end (original: >= start), inverse: < start
             $query->where($column, '<', $resolved->start->toDateTimeString());
             SqlDialect::excludeZeroDates($query, $column);
