@@ -20,4 +20,7 @@ enum DiagnosticCode: string
 
     /** The value fails the filter's type check or validation, e.g. a deleted option. */
     case InvalidValue = 'invalid_value';
+
+    /** The filter belongs to another relation than the group it stands in. */
+    case OutOfScope = 'out_of_scope';
 }

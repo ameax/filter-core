@@ -283,3 +283,8 @@ User::query()
 
 - [Collection Filtering](./06-collection-filtering.md) - Filter in-memory collections
 - [Filter Selections](./04-filter-selections.md) - Complex AND/OR logic
+
+## Several conditions on the same related record
+
+Two relation filters may each find a different related record. To require one record
+that meets all conditions, use a relation group: see [Relation groups](12-relation-groups.md).

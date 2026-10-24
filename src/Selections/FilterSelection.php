@@ -227,6 +227,43 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
+     * Add a group of conditions that must hold for one and the same related record.
+     *
+     * @example
+     * $selection->whereHas('kois', function (FilterGroup $koi) {
+     *     $koi->where(KoiStatusFilter::class)->is('active');
+     *     $koi->where(KoiCountFilter::class)->gt(5);
+     * });
+     * // Ponds with a koi that is active AND has a count above 5 (the same koi)
+     */
+    public function whereHas(string $relation, callable $callback, GroupOperatorEnum $operator = GroupOperatorEnum::AND): self
+    {
+        $this->rootGroup->whereHas($relation, $callback, $operator);
+
+        return $this;
+    }
+
+    /**
+     * Add a group of conditions that no related record may match.
+     */
+    public function whereDoesntHave(string $relation, callable $callback, GroupOperatorEnum $operator = GroupOperatorEnum::AND): self
+    {
+        $this->rootGroup->whereDoesntHave($relation, $callback, $operator);
+
+        return $this;
+    }
+
+    /**
+     * Only records without any related record.
+     */
+    public function whereHasNone(string $relation): self
+    {
+        $this->rootGroup->whereHasNone($relation);
+
+        return $this;
+    }
+
+    /**
      * Create an OR selection (top-level OR instead of AND).
      *
      * @param  class-string|null  $modelClass
