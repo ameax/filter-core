@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\Data;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\MatchModes\MatchMode;
+use Ameax\FilterCore\MatchModes\UnresolvedMatchMode;
 use Illuminate\Contracts\Support\Arrayable;
 use JsonSerializable;
 
@@ -87,13 +88,24 @@ final class FilterValue implements Arrayable, JsonSerializable
 
     /**
      * @param  array<string, mixed>  $data
+     * @param  bool  $lenient  keep an unknown match mode as UnresolvedMatchMode instead of
+     *                         throwing, so the condition survives loading and saving and
+     *                         the Resolver can report it
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, bool $lenient = false): self
     {
+        $modeKey = (string) ($data['mode'] ?? '');
+
+        if ($lenient && ! MatchMode::has($modeKey)) {
+            $mode = new UnresolvedMatchMode($modeKey);
+        } else {
+            $mode = MatchMode::get($modeKey);
+        }
+
         return new self(
-            $data['filter'],
-            MatchMode::get($data['mode']),
-            $data['value'],
+            (string) ($data['filter'] ?? ''),
+            $mode,
+            $data['value'] ?? null,
         );
     }
 }

@@ -225,8 +225,9 @@ final class FilterGroup implements Arrayable, JsonSerializable
      * Create a FilterGroup from an array.
      *
      * @param  array{operator?: string, items?: array<array<string, mixed>>}  $data
+     * @param  bool  $lenient  see FilterValue::fromArray()
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, bool $lenient = false): self
     {
         $operator = isset($data['operator'])
             ? GroupOperatorEnum::from($data['operator'])
@@ -237,9 +238,9 @@ final class FilterGroup implements Arrayable, JsonSerializable
         foreach ($data['items'] ?? [] as $itemData) {
             // Check if this is a nested group (has 'operator' key) or a filter value
             if (isset($itemData['operator'])) {
-                $group->addGroup(self::fromArray($itemData));
+                $group->addGroup(self::fromArray($itemData, $lenient));
             } else {
-                $group->add(FilterValue::fromArray($itemData));
+                $group->add(FilterValue::fromArray($itemData, $lenient));
             }
         }
 

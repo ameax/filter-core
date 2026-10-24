@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ameax\FilterCore\Query;
 
+use Ameax\FilterCore\Contracts\ContextAwareFilter;
 use Ameax\FilterCore\Contracts\MatchModeContract;
 use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterDefinition;
@@ -13,13 +14,12 @@ use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\MatchModes\NoneMatchMode;
+use Ameax\FilterCore\Resolution\FilterContext;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
-use Illuminate\Support\Facades\Validator;
 use InvalidArgumentException;
-use TypeError;
 
 /**
  * Applies filter values to Eloquent queries.
@@ -34,6 +34,8 @@ final class QueryApplicator
 
     /** @var array<FilterValue> */
     protected array $appliedFilters = [];
+
+    protected ?FilterContext $context = null;
 
     /**
      * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
@@ -68,6 +70,31 @@ final class QueryApplicator
         }
 
         return $this;
+    }
+
+    /**
+     * Pass a context to filters that implement ContextAwareFilter.
+     */
+    public function withContext(?FilterContext $context): self
+    {
+        $this->context = $context;
+
+        return $this;
+    }
+
+    /**
+     * Run the filter's own logic: applyWithContext() when a context is set and the
+     * filter takes one, apply() otherwise.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
+     */
+    protected function applyCustom(Filter $filter, Builder|QueryBuilder $query, MatchModeContract $matchMode, mixed $value): bool
+    {
+        if ($this->context !== null && $filter instanceof ContextAwareFilter) {
+            return $filter->applyWithContext($query, $matchMode, $value, $this->context);
+        }
+
+        return $filter->apply($query, $matchMode, $value);
     }
 
     /**
@@ -116,9 +143,7 @@ final class QueryApplicator
 
         // Sanitize, type-check, and validate value if filter instance is available
         if ($filter !== null) {
-            $value = $filter->sanitizeValue($value, $matchMode);
-            $value = $this->applyTypedValue($filter, $filterKey, $value);
-            $this->validateFilterValue($filter, $filterKey, $matchMode, $value);
+            $value = ValuePreparer::prepare($filter, $filterKey, $matchMode, $value);
         }
 
         // Convert BetweenValue to array for query application
@@ -127,7 +152,7 @@ final class QueryApplicator
         }
 
         // First, check if filter has custom apply logic
-        if ($filter !== null && $filter->apply($this->query, $matchMode, $value)) {
+        if ($filter !== null && $this->applyCustom($filter, $this->query, $matchMode, $value)) {
             // Custom logic was applied - done
         } elseif ($filter !== null && $relation !== null && $this->query instanceof Builder) {
             // Apply via relation with appropriate mode (whereHas, whereDoesntHave)
@@ -147,54 +172,6 @@ final class QueryApplicator
         $this->appliedFilters[] = $filterValue;
 
         return $this;
-    }
-
-    /**
-     * Apply the filter's typedValue() method if it exists.
-     *
-     * This provides strict type checking - if the filter defines a typedValue() method
-     * with a specific type signature, PHP will throw a TypeError if the value doesn't match.
-     *
-     * @throws FilterValidationException When type check fails
-     */
-    protected function applyTypedValue(Filter $filter, string $filterKey, mixed $value): mixed
-    {
-        if (! method_exists($filter, 'typedValue')) {
-            return $value;
-        }
-
-        try {
-            return $filter->typedValue($value);
-        } catch (TypeError $e) {
-            throw new FilterValidationException(
-                $filterKey,
-                ['value' => ['The value type is invalid for this filter: '.$e->getMessage()]]
-            );
-        }
-    }
-
-    /**
-     * Validate a filter value using the filter's validation rules.
-     *
-     * @throws FilterValidationException When validation fails
-     */
-    protected function validateFilterValue(
-        Filter $filter,
-        string $filterKey,
-        MatchModeContract $matchMode,
-        mixed $value
-    ): void {
-        $rules = $filter->validationRules($matchMode);
-
-        if (empty($rules)) {
-            return;
-        }
-
-        $validator = Validator::make(['value' => $value], $rules);
-
-        if ($validator->fails()) {
-            throw new FilterValidationException($filterKey, $validator->errors()->toArray());
-        }
     }
 
     /**
@@ -332,9 +309,7 @@ final class QueryApplicator
         $filter = $this->filters[$filterKey] ?? null;
 
         if ($filter !== null) {
-            $value = $filter->sanitizeValue($value, $matchMode);
-            $value = $this->applyTypedValue($filter, $filterKey, $value);
-            $this->validateFilterValue($filter, $filterKey, $matchMode, $value);
+            $value = ValuePreparer::prepare($filter, $filterKey, $matchMode, $value);
         }
 
         if ($value instanceof BetweenValue) {
@@ -342,7 +317,7 @@ final class QueryApplicator
         }
 
         // Check if filter has custom apply logic
-        if ($filter !== null && $filter->apply($relQuery, $matchMode, $value)) {
+        if ($filter !== null && $this->applyCustom($filter, $relQuery, $matchMode, $value)) {
             // Custom logic was applied
         } else {
             // Apply match mode logic
@@ -425,9 +400,7 @@ final class QueryApplicator
         $relation = $filter?->getRelation();
 
         if ($filter !== null) {
-            $value = $filter->sanitizeValue($value, $matchMode);
-            $value = $this->applyTypedValue($filter, $filterKey, $value);
-            $this->validateFilterValue($filter, $filterKey, $matchMode, $value);
+            $value = ValuePreparer::prepare($filter, $filterKey, $matchMode, $value);
         }
 
         if ($value instanceof BetweenValue) {
@@ -436,7 +409,7 @@ final class QueryApplicator
 
         // Build the condition closure
         $condition = function (Builder|QueryBuilder $q) use ($filter, $matchMode, $column, $value, $relation): void {
-            if ($filter !== null && $filter->apply($q, $matchMode, $value)) {
+            if ($filter !== null && $this->applyCustom($filter, $q, $matchMode, $value)) {
                 // Custom logic was applied
             } elseif ($filter !== null && $relation !== null && $q instanceof Builder) {
                 $this->applyRelationFilter(

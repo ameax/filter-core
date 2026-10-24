@@ -5,8 +5,12 @@ namespace Ameax\FilterCore\Concerns;
 use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
+use Ameax\FilterCore\Exceptions\SelectionNotApplicableException;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\Query\QueryApplicator;
+use Ameax\FilterCore\Resolution\FilterContext;
+use Ameax\FilterCore\Resolution\ResolvedSelection;
+use Ameax\FilterCore\Resolution\Resolver;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
@@ -211,37 +215,10 @@ trait Filterable
             return $query;
         }
 
-        // In non-strict mode, we need to filter out unknown filters
-        // For now, non-strict mode only works with flat selections
-        if (! $strict && ! $selection->hasNestedGroups()) {
-            $validKeys = static::getFilterKeys();
-            $validFilters = array_filter(
-                $selection->all(),
-                fn (FilterValue $fv) => in_array($fv->getFilterKey(), $validKeys, true)
-            );
-
-            if (empty($validFilters)) {
-                return $query;
-            }
-
-            // Keep the operator: an OR selection must stay OR after dropping unknown filters.
-            if ($selection->getOperator() === GroupOperatorEnum::OR) {
-                $known = FilterSelection::makeOr();
-                foreach ($validFilters as $filterValue) {
-                    $known->add($filterValue);
-                }
-
-                return QueryApplicator::for($query)
-                    ->withFilters(static::getFilters())
-                    ->applySelection($known)
-                    ->getQuery();
-            }
-
-            $applicator = QueryApplicator::for($query)
-                ->withFilters(static::getFilters())
-                ->applyFilters($validFilters);
-
-            return $applicator->getQuery();
+        // Non-strict: resolve leniently, so unknown filters, unknown or disallowed match
+        // modes and invalid values are left out at any depth, keeping the operators.
+        if (! $strict) {
+            return static::resolveSelection($selection, FilterContext::lenient())->applyTo($query);
         }
 
         // Use the full group-based application for complex selections
@@ -250,6 +227,39 @@ trait Filterable
             ->applySelection($selection);
 
         return $applicator->getQuery();
+    }
+
+    /**
+     * Check a selection against this model's filters before applying it.
+     *
+     * Strict (default): throws SelectionNotApplicableException when any condition
+     * cannot be applied. Lenient: leaves those conditions out and reports them.
+     *
+     * @example
+     * $resolved = Account::resolveSelection($selection, FilterContext::lenient());
+     * $resolved->applyTo(Account::query())->get();
+     * foreach ($resolved->diagnostics() as $diagnostic) { ... }
+     */
+    public static function resolveSelection(FilterSelection $selection, ?FilterContext $context = null): ResolvedSelection
+    {
+        return Resolver::for(static::getFilters())->resolve($selection, $context);
+    }
+
+    /**
+     * Resolve with the given context and apply.
+     *
+     * @param  Builder<static>  $query
+     * @return Builder<static>
+     *
+     * @throws SelectionNotApplicableException in strict context
+     */
+    public function scopeApplySelectionWith(Builder $query, FilterSelection $selection, FilterContext $context): Builder
+    {
+        if (! $selection->hasFilters()) {
+            return $query;
+        }
+
+        return static::resolveSelection($selection, $context)->applyTo($query);
     }
 
     // ========================================================================

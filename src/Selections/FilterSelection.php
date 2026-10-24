@@ -57,12 +57,12 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     /**
      * Create a FilterSelection from JSON string.
      */
-    public static function fromJson(string $json): self
+    public static function fromJson(string $json, bool $lenient = false): self
     {
         /** @var array<string, mixed> $data */
         $data = json_decode($json, true);
 
-        return self::fromArray($data);
+        return self::fromArray($data, $lenient);
     }
 
     /**
@@ -71,8 +71,9 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      * Supports both legacy format (flat 'filters' array) and new format (with 'group').
      *
      * @param  array<string, mixed>  $data
+     * @param  bool  $lenient  keep unknown match modes as UnresolvedMatchMode (see Resolver)
      */
-    public static function fromArray(array $data): self
+    public static function fromArray(array $data, bool $lenient = false): self
     {
         $selection = new self;
         $selection->name = $data['name'] ?? null;
@@ -81,16 +82,16 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
 
         // Support new group-based format
         if (isset($data['group'])) {
-            $selection->rootGroup = FilterGroup::fromArray($data['group']);
+            $selection->rootGroup = FilterGroup::fromArray($data['group'], $lenient);
         }
         // Legacy format: flat 'filters' array (implicitly AND)
         elseif (isset($data['filters'])) {
             foreach ($data['filters'] as $filterData) {
                 // Check if this is a nested group or a filter value
                 if (isset($filterData['operator'])) {
-                    $selection->rootGroup->addGroup(FilterGroup::fromArray($filterData));
+                    $selection->rootGroup->addGroup(FilterGroup::fromArray($filterData, $lenient));
                 } else {
-                    $selection->rootGroup->add(FilterValue::fromArray($filterData));
+                    $selection->rootGroup->add(FilterValue::fromArray($filterData, $lenient));
                 }
             }
         }
@@ -143,6 +144,17 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
         $this->rootGroup->add($filterValue);
 
         return $this;
+    }
+
+    /**
+     * A copy with another root group, keeping name, description and model.
+     */
+    public function withGroup(FilterGroup $group): self
+    {
+        $copy = clone $this;
+        $copy->rootGroup = $group;
+
+        return $copy;
     }
 
     /**
