@@ -10,6 +10,7 @@ use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
 use Ameax\FilterCore\Tests\Filters\KoiVarietyFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\TestCase;
+use Illuminate\Support\Facades\DB;
 
 /**
  * MatchModes Tutorial - All 17 MatchModes Explained.
@@ -318,6 +319,10 @@ class MatchModesTest extends TestCase
      */
     public function test_regex_mode(): void
     {
+        if (DB::connection()->getDriverName() === 'sqlsrv') {
+            $this->markTestSkipped('SQL Server has no regular expressions; see tests/Regression.');
+        }
+
         // Match names starting with S
         $result = Koi::query()
             ->applyFilter(FilterValue::for(KoiNameFilter::class)->regex('^S'))

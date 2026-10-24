@@ -13,6 +13,7 @@ use Ameax\FilterCore\Enums\FilterTypeEnum;
 use Ameax\FilterCore\Filters\Dynamic\DynamicDateFilter;
 use Ameax\FilterCore\MatchModes\DateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode;
+use Ameax\FilterCore\Query\SqlDialect;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
@@ -114,25 +115,34 @@ abstract class DateFilter extends Filter
         $column = $this->column();
         $isNot = $mode instanceof NotInDateRangeMatchMode;
 
-        // Apply the resolved range
+        // Apply the resolved range. Every comparison that looks below a bound also
+        // excludes the zero date of legacy MySQL schemas: it sorts before every real
+        // date but means "no date", so it is treated like NULL.
         if ($resolved->start !== null && $resolved->end !== null) {
             if ($isNot) {
                 $query->whereNotBetween($column, [
                     $resolved->start->toDateTimeString(),
                     $resolved->end->toDateTimeString(),
                 ]);
+                SqlDialect::excludeZeroDates($query, $column);
             } else {
                 $query->whereBetween($column, [
                     $resolved->start->toDateTimeString(),
                     $resolved->end->toDateTimeString(),
                 ]);
             }
-        } elseif ($resolved->start === null && $resolved->end !== null) {
+        } elseif ($resolved->end !== null) {
             $operator = $isNot ? '>' : '<=';
             $query->where($column, $operator, $resolved->end->toDateTimeString());
-        } elseif ($resolved->start !== null && $resolved->end === null) {
+            if (! $isNot) {
+                SqlDialect::excludeZeroDates($query, $column);
+            }
+        } elseif ($resolved->start !== null) {
             $operator = $isNot ? '<' : '>=';
             $query->where($column, $operator, $resolved->start->toDateTimeString());
+            if ($isNot) {
+                SqlDialect::excludeZeroDates($query, $column);
+            }
         }
 
         return true;

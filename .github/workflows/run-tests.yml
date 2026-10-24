@@ -16,9 +16,41 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
-    name: P8.3 - L12 - ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        db: [mariadb, sqlsrv]
+
+    name: P8.3 - L12 - ${{ matrix.db }}
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: 'yes'
+          MARIADB_DATABASE: filter_core_testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+      sqlsrv:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: 'FilterCore!2026'
+        ports:
+          - 1433:1433
+
+    env:
+      DB_CONNECTION: ${{ matrix.db }}
+      DB_HOST: 127.0.0.1
+      DB_DATABASE: filter_core_testing
+      DB_PORT: ${{ matrix.db == 'sqlsrv' && '1433' || '3306' }}
+      DB_USERNAME: ${{ matrix.db == 'sqlsrv' && 'sa' || 'root' }}
+      DB_PASSWORD: ${{ matrix.db == 'sqlsrv' && 'FilterCore!2026' || '' }}
 
     steps:
       - name: Checkout code
@@ -28,8 +60,41 @@ jobs:
         uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, sqlite, pdo_sqlite, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
+          extensions: dom, curl, libxml, mbstring, zip, pcntl, pdo, pdo_mysql, sqlite, pdo_sqlite, sqlsrv, pdo_sqlsrv, bcmath, soap, intl, gd, exif, iconv, imagick, fileinfo
           coverage: none
+
+      - name: Install ODBC driver for SQL Server
+        if: matrix.db == 'sqlsrv'
+        run: |
+          if odbcinst -q -d 2>/dev/null | grep -q "ODBC Driver 18 for SQL Server"; then
+            echo "ODBC Driver 18 present"
+          else
+            curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/microsoft-prod.gpg
+            curl -fsSL "https://packages.microsoft.com/config/ubuntu/$(lsb_release -rs)/prod.list" | sudo tee /etc/apt/sources.list.d/mssql-release.list
+            sudo apt-get update
+            sudo ACCEPT_EULA=Y apt-get install -y msodbcsql18
+          fi
+
+      - name: Create SQL Server database
+        if: matrix.db == 'sqlsrv'
+        # SQL Server needs a while after the container reports "started".
+        run: |
+          php -r '
+            $error = "";
+            for ($i = 0; $i < 60; $i++) {
+                try {
+                    $pdo = new PDO("sqlsrv:Server=127.0.0.1,1433;TrustServerCertificate=1", "sa", getenv("DB_PASSWORD"));
+                    $pdo->exec("IF DB_ID(N'"'"'filter_core_testing'"'"') IS NULL CREATE DATABASE filter_core_testing");
+                    echo "database ready\n";
+                    exit(0);
+                } catch (Throwable $e) {
+                    $error = $e->getMessage();
+                    sleep(2);
+                }
+            }
+            fwrite(STDERR, "SQL Server not reachable: ".$error."\n");
+            exit(1);
+          '
 
       - name: Setup problem matchers
         run: |

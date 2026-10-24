@@ -4,6 +4,7 @@ namespace Ameax\FilterCore\Concerns;
 
 use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Data\FilterValue;
+use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Selections\FilterSelection;
@@ -143,8 +144,9 @@ trait Filterable
      */
     public function scopeApplyFilters(Builder $query, array|FilterSelection $filters): Builder
     {
-        // For FilterSelection with nested groups, delegate to applySelection
-        if ($filters instanceof FilterSelection && $filters->hasNestedGroups()) {
+        // Nested groups and OR selections need the group logic; the flat path below
+        // combines everything with AND.
+        if ($filters instanceof FilterSelection && ($filters->hasNestedGroups() || $filters->getOperator() === GroupOperatorEnum::OR)) {
             return $this->scopeApplySelection($query, $filters);
         }
 
@@ -220,6 +222,19 @@ trait Filterable
 
             if (empty($validFilters)) {
                 return $query;
+            }
+
+            // Keep the operator: an OR selection must stay OR after dropping unknown filters.
+            if ($selection->getOperator() === GroupOperatorEnum::OR) {
+                $known = FilterSelection::makeOr();
+                foreach ($validFilters as $filterValue) {
+                    $known->add($filterValue);
+                }
+
+                return QueryApplicator::for($query)
+                    ->withFilters(static::getFilters())
+                    ->applySelection($known)
+                    ->getQuery();
             }
 
             $applicator = QueryApplicator::for($query)
