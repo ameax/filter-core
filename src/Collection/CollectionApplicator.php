@@ -8,6 +8,7 @@ use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterDefinition;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
+use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
 use Ameax\FilterCore\Query\ValuePreparer;
@@ -139,6 +140,9 @@ final class CollectionApplicator
         return $this;
     }
 
+    /** The relation whose items are being filtered (inside a relation group), if any. */
+    protected ?string $currentRelation = null;
+
     /**
      * Apply a FilterSelection to the collection.
      *
@@ -167,6 +171,31 @@ final class CollectionApplicator
             return $collection;
         }
 
+        $relation = $group->getRelation();
+        if ($relation !== null) {
+            // Same semantics as the query: the group's conditions hold for one related item.
+            return $collection->filter(function (mixed $item) use ($relation, $group): bool {
+                $related = self::related($item, $relation);
+
+                return match ($group->getRelationMode()) {
+                    RelationModeEnum::HAS => $this->withinRelation($relation, fn () => $this->applyItems($related, $group))->isNotEmpty(),
+                    RelationModeEnum::DOESNT_HAVE => $this->withinRelation($relation, fn () => $this->applyItems($related, $group))->isEmpty(),
+                    RelationModeEnum::HAS_NONE => $related->isEmpty(),
+                };
+            });
+        }
+
+        return $this->applyItems($collection, $group);
+    }
+
+    /**
+     * Apply the items of a group with its operator, ignoring a relation binding.
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     * @return Collection<int|string, mixed>
+     */
+    protected function applyItems(Collection $collection, FilterGroup $group): Collection
+    {
         $items = $group->getItems();
         $isOr = $group->getOperator() === GroupOperatorEnum::OR;
 
@@ -271,7 +300,50 @@ final class CollectionApplicator
 
         $this->appliedFilters[] = $filterValue;
 
+        $scope = $filter?->relationScope();
+        if ($scope !== null && $scope !== $this->currentRelation) {
+            return $collection->filter(fn (mixed $item): bool => $this->withinRelation(
+                $scope,
+                fn () => $matchMode->applyToCollection(self::related($item, $scope), $column, $value)
+            )->isNotEmpty());
+        }
+
         return $matchMode->applyToCollection($collection, $column, $value);
+    }
+
+    /**
+     * The related items of an item, as a collection.
+     *
+     * @return Collection<int|string, mixed>
+     */
+    protected static function related(mixed $item, string $relation): Collection
+    {
+        $related = data_get($item, $relation);
+        if ($related instanceof Collection) {
+            return $related;
+        }
+        if ($related === null) {
+            return new Collection;
+        }
+
+        return new Collection(is_iterable($related) ? $related : [$related]);
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    protected function withinRelation(string $relation, callable $callback): mixed
+    {
+        $outer = $this->currentRelation;
+        $this->currentRelation = $relation;
+        try {
+            return $callback();
+        } finally {
+            $this->currentRelation = $outer;
+        }
     }
 
     /**
