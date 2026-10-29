@@ -263,3 +263,26 @@ it('reads "none of" on a scoped filter outside a group as "has no such related r
         // Inside the group it is a condition on the one koi: a koi that is not active.
         ->and(relationGroupBoth($inGroup))->toBe(['B', 'C']);
 });
+
+it('keeps the relation of a root group when a filter is removed', function () {
+    $selection = FilterSelection::make()->withGroup(FilterGroup::has('kois')
+        ->add(PondKoiStatusFilter::value()->is('active'))
+        ->add(PondKoiCountFilter::value()->gt(5))
+        ->add(PondKoiNameFilter::value()->is('Kohaku')));
+
+    $selection->remove(PondKoiNameFilter::class);
+
+    expect($selection->getGroup()->getRelation())->toBe('kois')
+        ->and(relationGroupBoth($selection))->toBe(['A']);
+});
+
+it('explains relation groups with their relation and mode', function () {
+    $selection = FilterSelection::make()
+        ->whereHas('kois', fn (FilterGroup $koi) => $koi->where(PondKoiStatusFilter::class)->is('active'))
+        ->whereDoesntHave('kois', fn (FilterGroup $koi) => $koi->where(PondKoiCountFilter::class)->gt(5))
+        ->whereHasNone('kois');
+
+    expect($selection->explain())->toBe(
+        "(HAS kois WHERE (PondKoiStatusFilter IS 'active')) AND (DOESNT HAVE kois WHERE (PondKoiCountFilter GT 5)) AND (HAS NO kois)"
+    );
+});
