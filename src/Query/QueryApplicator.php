@@ -521,6 +521,8 @@ final class QueryApplicator
             throw new InvalidArgumentException("The group for relation '{$relation}' needs an Eloquent query");
         }
 
+        $this->guardRelation($relation);
+
         $inRelation = function (Builder $relQuery) use ($relation, $group): void {
             $this->withinRelation($relation, fn () => $this->applyGroup($relQuery, $group));
         };
@@ -566,6 +568,21 @@ final class QueryApplicator
         $relation = $filter?->getRelation();
 
         return $relation !== null && $relation === $this->currentRelation ? null : $relation;
+    }
+
+    /**
+     * A relation group calls the relation by name on the model, so only relations
+     * that a registered filter declares are allowed.
+     */
+    protected function guardRelation(string $relation): void
+    {
+        foreach ($this->filters as $filter) {
+            if ($filter->belongsToRelation($relation)) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException("Relation '{$relation}' is not declared by any registered filter");
     }
 
     /**

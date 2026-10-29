@@ -95,8 +95,19 @@ final class Resolver
      */
     private function resolveGroup(FilterGroup $group, array $path, Diagnostics $diagnostics, ?string $relation): ?FilterGroup
     {
+        $own = $group->getRelation();
+        if ($own !== null && ! $this->declaresRelation($own)) {
+            $diagnostics->add(new Diagnostic(
+                DiagnosticCode::UnknownRelation, $path, '', $group->getRelationMode()->value, $own,
+                "Relation '{$own}' is not declared by any registered filter"
+            ));
+
+            // Leaving it out widens under the restrictive policy, so it matches nothing.
+            return $this->restrictive ? FilterGroup::and()->add(NeverFilter::condition()) : null;
+        }
+
         $resolved = $group->emptyCopy();
-        $relation = $group->getRelation() ?? $relation;
+        $relation = $own ?? $relation;
         $findings = $diagnostics->count();
 
         foreach ($group->getItems() as $index => $item) {
@@ -131,6 +142,17 @@ final class Resolver
         }
 
         return $resolved->isEmpty() ? null : $resolved;
+    }
+
+    private function declaresRelation(string $relation): bool
+    {
+        foreach ($this->filters as $filter) {
+            if ($filter->belongsToRelation($relation)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

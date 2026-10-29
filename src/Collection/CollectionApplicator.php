@@ -173,6 +173,8 @@ final class CollectionApplicator
 
         $relation = $group->getRelation();
         if ($relation !== null) {
+            $this->guardRelation($relation);
+
             // Same semantics as the query: the group's conditions hold for one related item.
             return $collection->filter(function (mixed $item) use ($relation, $group): bool {
                 $related = self::related($item, $relation);
@@ -327,6 +329,20 @@ final class CollectionApplicator
         }
 
         return new Collection(is_iterable($related) ? $related : [$related]);
+    }
+
+    /**
+     * Same rule as the query: only relations that a registered filter declares.
+     */
+    protected function guardRelation(string $relation): void
+    {
+        foreach ($this->filters as $filter) {
+            if ($filter->belongsToRelation($relation)) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException("Relation '{$relation}' is not declared by any registered filter");
     }
 
     /**
