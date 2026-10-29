@@ -3,10 +3,10 @@
 use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
+use Ameax\FilterCore\Exceptions\SelectionNotApplicableException;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Resolution\DiagnosticCode;
 use Ameax\FilterCore\Resolution\FilterContext;
-use Ameax\FilterCore\Exceptions\SelectionNotApplicableException;
 use Ameax\FilterCore\Resolution\Resolver;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
@@ -252,4 +252,14 @@ it('keeps a relation group at the root through serialization', function () {
     expect(relationGroupQuery(FilterSelection::fromJson($has->toJson())))->toBe(['A'])
         ->and(relationGroupQuery(FilterSelection::fromJson($hasNone->toJson())))->toBe(['D'])
         ->and(FilterSelection::fromJson($has->toJson())->getGroup()->getRelation())->toBe('kois');
+});
+
+it('reads "none of" on a scoped filter outside a group as "has no such related record", like via()', function () {
+    $scoped = FilterSelection::make()->where(PondKoiStatusFilter::class)->none(['active']);
+    $inGroup = FilterSelection::make()->whereHas('kois', fn (FilterGroup $koi) => $koi->where(PondKoiStatusFilter::class)->none(['active']));
+
+    // C has only an inactive koi, D none at all; B also has an active one.
+    expect(relationGroupBoth($scoped))->toBe(['C', 'D'])
+        // Inside the group it is a condition on the one koi: a koi that is not active.
+        ->and(relationGroupBoth($inGroup))->toBe(['B', 'C']);
 });

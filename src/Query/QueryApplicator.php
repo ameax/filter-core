@@ -13,6 +13,7 @@ use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
+use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Resolution\FilterContext;
 use Ameax\FilterCore\Selections\FilterGroup;
@@ -154,9 +155,10 @@ final class QueryApplicator
             $value = $value->toArray();
         }
 
-        $condition = function (Builder|QueryBuilder $q) use ($filter, $matchMode, $column, $value, $relation): void {
+        $condition = function (Builder|QueryBuilder $q, ?MatchModeContract $mode = null) use ($filter, $matchMode, $column, $value, $relation): void {
+            $mode ??= $matchMode;
             // First, check if filter has custom apply logic
-            if ($filter !== null && $this->applyCustom($filter, $q, $matchMode, $value)) {
+            if ($filter !== null && $this->applyCustom($filter, $q, $mode, $value)) {
                 // Custom logic was applied - done
             } elseif ($filter !== null && $relation !== null && $q instanceof Builder) {
                 // Apply via relation with appropriate mode (whereHas, whereDoesntHave)
@@ -165,15 +167,15 @@ final class QueryApplicator
                     $relation,
                     $filter->getRelationMode(),
                     $column,
-                    $matchMode,
+                    $mode,
                     $value
                 );
             } else {
                 // Apply match mode logic directly
-                $matchMode->apply($q, $column, $value);
+                $mode->apply($q, $column, $value);
             }
         };
-        $this->applyInScope($this->query, $filter, $condition);
+        $this->applyInScope($this->query, $filter, $condition, $matchMode);
 
         $this->appliedFilters[] = $filterValue;
 
@@ -414,8 +416,9 @@ final class QueryApplicator
         }
 
         // Build the condition closure
-        $condition = function (Builder|QueryBuilder $q) use ($filter, $matchMode, $column, $value, $relation): void {
-            if ($filter !== null && $this->applyCustom($filter, $q, $matchMode, $value)) {
+        $condition = function (Builder|QueryBuilder $q, ?MatchModeContract $mode = null) use ($filter, $matchMode, $column, $value, $relation): void {
+            $mode ??= $matchMode;
+            if ($filter !== null && $this->applyCustom($filter, $q, $mode, $value)) {
                 // Custom logic was applied
             } elseif ($filter !== null && $relation !== null && $q instanceof Builder) {
                 $this->applyRelationFilter(
@@ -423,19 +426,19 @@ final class QueryApplicator
                     $relation,
                     $filter->getRelationMode(),
                     $column,
-                    $matchMode,
+                    $mode,
                     $value
                 );
             } else {
-                $matchMode->apply($q, $column, $value);
+                $mode->apply($q, $column, $value);
             }
         };
 
         // Apply with AND or OR
         if ($useOr) {
-            $query->orWhere(fn ($q) => $this->applyInScope($q, $filter, $condition));
+            $query->orWhere(fn ($q) => $this->applyInScope($q, $filter, $condition, $matchMode));
         } else {
-            $query->where(fn ($q) => $this->applyInScope($q, $filter, $condition));
+            $query->where(fn ($q) => $this->applyInScope($q, $filter, $condition, $matchMode));
         }
 
         $this->appliedFilters[] = $filterValue;
@@ -539,9 +542,9 @@ final class QueryApplicator
      * filters the records of the filter's relation scope, through whereHas() otherwise.
      *
      * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
-     * @param  callable(Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder): void  $condition
+     * @param  callable(Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder, ?MatchModeContract=): void  $condition  takes a match mode that replaces the filter's own
      */
-    protected function applyInScope(Builder|QueryBuilder $query, ?Filter $filter, callable $condition): void
+    protected function applyInScope(Builder|QueryBuilder $query, ?Filter $filter, callable $condition, ?MatchModeContract $matchMode = null): void
     {
         $scope = $filter?->relationScope();
         if ($filter === null || $scope === null || $scope === $this->currentRelation) {
@@ -552,6 +555,16 @@ final class QueryApplicator
 
         if (! $query instanceof Builder) {
             throw new InvalidArgumentException("Filter '{$filter->resolveKey()}' belongs to relation '{$scope}' and needs an Eloquent query");
+        }
+
+        // "None of" must hold for every related record, as for via() filters
+        // (applyRelationFilter()): no related record has any of the values.
+        if ($matchMode instanceof NoneMatchMode) {
+            $query->whereDoesntHave($scope, function (Builder $relQuery) use ($scope, $condition): void {
+                $this->withinRelation($scope, fn () => $condition($relQuery, new AnyMatchMode));
+            });
+
+            return;
         }
 
         $query->whereHas($scope, function (Builder $relQuery) use ($scope, $condition): void {
