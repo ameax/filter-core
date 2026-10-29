@@ -532,8 +532,10 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public function toArray(): array
     {
-        // For backward compatibility, use legacy format if possible
-        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND) {
+        // For backward compatibility, use legacy format if possible. It has no place
+        // for a relation, so a root group bound to one always uses the group format.
+        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND
+            && ! $this->rootGroup->isRelationGroup()) {
             $data = [
                 'name' => $this->name,
                 'description' => $this->description,

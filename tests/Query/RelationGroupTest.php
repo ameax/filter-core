@@ -242,3 +242,14 @@ it('reports an undeclared relation in resolution under every policy', function (
         ->and($restrictive->applyTo(Pond::query())->count())->toBe(0)
         ->and(Koi::count())->toBe(4);
 });
+
+it('keeps a relation group at the root through serialization', function () {
+    $has = FilterSelection::make()->withGroup(FilterGroup::has('kois')
+        ->add(PondKoiStatusFilter::value()->is('active'))
+        ->add(PondKoiCountFilter::value()->gt(5)));
+    $hasNone = FilterSelection::make()->withGroup(FilterGroup::hasNone('kois'));
+
+    expect(relationGroupQuery(FilterSelection::fromJson($has->toJson())))->toBe(['A'])
+        ->and(relationGroupQuery(FilterSelection::fromJson($hasNone->toJson())))->toBe(['D'])
+        ->and(FilterSelection::fromJson($has->toJson())->getGroup()->getRelation())->toBe('kois');
+});
