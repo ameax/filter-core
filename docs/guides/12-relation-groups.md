@@ -106,3 +106,9 @@ the group to them.
 
 Relation groups and scoped filters need an Eloquent query (`whereHas()`); on a plain
 query builder they throw `InvalidArgumentException`.
+
+A group may only use a relation that a registered filter declares, through
+`relationScope()` or `via()`. The relation of a stored group becomes a method call on
+the model, so an undeclared one is rejected before it is called: the applicators throw
+`InvalidArgumentException`, the resolver reports `UnknownRelation` (strict: exception,
+lenient: the group is left out, restrictive: the group matches nothing).
