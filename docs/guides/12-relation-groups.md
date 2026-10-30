@@ -33,7 +33,8 @@ It is applied as one `whereHas('contacts', …)` with all conditions inside.
 | has none | `whereHasNone($relation)`, `FilterGroup::hasNone()` | no related record at all; the group takes no conditions |
 
 The operator of the group works as usual: pass `GroupOperatorEnum::OR` for "a contact
-who is a buyer OR works in purchasing". Groups nest, also inside relation groups.
+who is a buyer OR works in purchasing". Groups nest, also inside relation groups
+(see the note under Requirements for a relation group inside a relation group).
 
 ## Filters that belong to a relation
 
@@ -112,3 +113,8 @@ A group may only use a relation that a registered filter declares, through
 the model, so an undeclared one is rejected before it is called: the applicators throw
 `InvalidArgumentException`, the resolver reports `UnknownRelation` (strict: exception,
 lenient: the group is left out, restrictive: the group matches nothing).
+
+The check always looks at the filters registered for the filtered model. A relation
+group inside a relation group names a relation of the *related* model (`pond` on a
+koi, inside `whereHas('kois')`), so it is only accepted when a registered filter
+declares that inner name as well. A path-based check (`kois.pond`) is planned.
