@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\Selections;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Data\FilterValueBuilder;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
+use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
@@ -306,8 +307,8 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
         $key = $filterClass::key();
         $items = $this->rootGroup->getItems();
 
-        // Rebuild root group without matching filters
-        $newGroup = new FilterGroup($this->rootGroup->getOperator());
+        // Rebuild root group without matching filters, keeping a relation it is bound to
+        $newGroup = $this->rootGroup->emptyCopy();
         foreach ($items as $item) {
             if ($item instanceof FilterValue && $item->getFilterKey() === $key) {
                 continue;
@@ -532,8 +533,10 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public function toArray(): array
     {
-        // For backward compatibility, use legacy format if possible
-        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND) {
+        // For backward compatibility, use legacy format if possible. It has no place
+        // for a relation, so a root group bound to one always uses the group format.
+        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND
+            && ! $this->rootGroup->isRelationGroup()) {
             $data = [
                 'name' => $this->name,
                 'description' => $this->description,
@@ -736,7 +739,19 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
             }
         }
 
-        return implode($operator, $parts);
+        $explanation = implode($operator, $parts);
+        $relation = $group->getRelation();
+
+        // An empty "has" or "doesn't have" group is not applied, so it explains as nothing.
+        if ($relation === null || ($explanation === '' && $group->getRelationMode() !== RelationModeEnum::HAS_NONE)) {
+            return $explanation;
+        }
+
+        return match ($group->getRelationMode()) {
+            RelationModeEnum::HAS => "HAS {$relation} WHERE ({$explanation})",
+            RelationModeEnum::DOESNT_HAVE => "DOESNT HAVE {$relation} WHERE ({$explanation})",
+            RelationModeEnum::HAS_NONE => "HAS NO {$relation}",
+        };
     }
 
     /**

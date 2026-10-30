@@ -3,6 +3,7 @@
 use Ameax\FilterCore\Collection\CollectionApplicator;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
+use Ameax\FilterCore\Exceptions\SelectionNotApplicableException;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Resolution\DiagnosticCode;
 use Ameax\FilterCore\Resolution\FilterContext;
@@ -171,11 +172,11 @@ it('keeps the relation of a group through resolution and drops what cannot be ap
 });
 
 it('reports a scoped filter in a group for another relation', function () {
-    $selection = FilterSelection::make()->whereHas('ponds', function (FilterGroup $group) {
+    $selection = FilterSelection::make()->whereHas('pond', function (FilterGroup $group) {
         $group->where(PondKoiStatusFilter::class)->is('active');
     });
 
-    $resolved = Resolver::for(relationGroupFilters())->resolve($selection, FilterContext::lenient());
+    $resolved = Resolver::for([...relationGroupFilters(), PondWaterTypeFilter::via('pond')])->resolve($selection, FilterContext::lenient());
 
     expect($resolved->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::OutOfScope);
 });
@@ -210,4 +211,78 @@ it('does not nest a second whereHas for a via() filter inside a group for the sa
 
     expect($names)->toBe(['Kohaku', 'Sanke', 'Showa'])
         ->and(substr_count(strtolower($query->toSql()), 'exists'))->toBe(1);
+});
+
+/** A stored group whose relation is a model method with side effects. */
+function relationGroupHostile(): FilterSelection
+{
+    return FilterSelection::fromArray(['group' => ['operator' => 'and', 'items' => [
+        ['operator' => 'and', 'relation' => 'kois.truncate', 'relation_mode' => 'has_none', 'items' => []],
+    ]]]);
+}
+
+it('rejects a relation group for a relation no registered filter declares, before calling it', function () {
+    $kois = Koi::count();
+
+    expect(fn () => relationGroupQuery(relationGroupHostile()))->toThrow(InvalidArgumentException::class, 'kois.truncate')
+        ->and(fn () => relationGroupCollection(relationGroupHostile()))->toThrow(InvalidArgumentException::class, 'kois.truncate')
+        ->and(Koi::count())->toBe($kois);
+});
+
+it('reports an undeclared relation in resolution under every policy', function () {
+    $resolver = Resolver::for(relationGroupFilters());
+
+    expect(fn () => $resolver->resolve(relationGroupHostile(), FilterContext::strict()))->toThrow(SelectionNotApplicableException::class);
+
+    $lenient = $resolver->resolve(relationGroupHostile(), FilterContext::lenient());
+    $restrictive = $resolver->resolve(relationGroupHostile(), FilterContext::restrictive());
+
+    expect($lenient->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::UnknownRelation)
+        ->and($lenient->applyTo(Pond::query())->count())->toBe(4)
+        ->and($restrictive->applyTo(Pond::query())->count())->toBe(0)
+        ->and(Koi::count())->toBe(4);
+});
+
+it('keeps a relation group at the root through serialization', function () {
+    $has = FilterSelection::make()->withGroup(FilterGroup::has('kois')
+        ->add(PondKoiStatusFilter::value()->is('active'))
+        ->add(PondKoiCountFilter::value()->gt(5)));
+    $hasNone = FilterSelection::make()->withGroup(FilterGroup::hasNone('kois'));
+
+    expect(relationGroupQuery(FilterSelection::fromJson($has->toJson())))->toBe(['A'])
+        ->and(relationGroupQuery(FilterSelection::fromJson($hasNone->toJson())))->toBe(['D'])
+        ->and(FilterSelection::fromJson($has->toJson())->getGroup()->getRelation())->toBe('kois');
+});
+
+it('reads "none of" on a scoped filter outside a group as "has no such related record", like via()', function () {
+    $scoped = FilterSelection::make()->where(PondKoiStatusFilter::class)->none(['active']);
+    $inGroup = FilterSelection::make()->whereHas('kois', fn (FilterGroup $koi) => $koi->where(PondKoiStatusFilter::class)->none(['active']));
+
+    // C has only an inactive koi, D none at all; B also has an active one.
+    expect(relationGroupBoth($scoped))->toBe(['C', 'D'])
+        // Inside the group it is a condition on the one koi: a koi that is not active.
+        ->and(relationGroupBoth($inGroup))->toBe(['B', 'C']);
+});
+
+it('keeps the relation of a root group when a filter is removed', function () {
+    $selection = FilterSelection::make()->withGroup(FilterGroup::has('kois')
+        ->add(PondKoiStatusFilter::value()->is('active'))
+        ->add(PondKoiCountFilter::value()->gt(5))
+        ->add(PondKoiNameFilter::value()->is('Kohaku')));
+
+    $selection->remove(PondKoiNameFilter::class);
+
+    expect($selection->getGroup()->getRelation())->toBe('kois')
+        ->and(relationGroupBoth($selection))->toBe(['A']);
+});
+
+it('explains relation groups with their relation and mode', function () {
+    $selection = FilterSelection::make()
+        ->whereHas('kois', fn (FilterGroup $koi) => $koi->where(PondKoiStatusFilter::class)->is('active'))
+        ->whereDoesntHave('kois', fn (FilterGroup $koi) => $koi->where(PondKoiCountFilter::class)->gt(5))
+        ->whereHasNone('kois');
+
+    expect($selection->explain())->toBe(
+        "(HAS kois WHERE (PondKoiStatusFilter IS 'active')) AND (DOESNT HAVE kois WHERE (PondKoiCountFilter GT 5)) AND (HAS NO kois)"
+    );
 });
