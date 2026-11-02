@@ -16,6 +16,8 @@ use Ameax\FilterCore\Tests\Filters\PondKoiStatusFilter;
 use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
+use Closure;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /*
  * Relation groups: the conditions of a group bound to a relation hold for one and the
@@ -285,4 +287,30 @@ it('explains relation groups with their relation and mode', function () {
     expect($selection->explain())->toBe(
         "(HAS kois WHERE (PondKoiStatusFilter IS 'active')) AND (DOESNT HAVE kois WHERE (PondKoiCountFilter GT 5)) AND (HAS NO kois)"
     );
+});
+
+it('applies a relation group at the root through applyFilters() like applySelection()', function () {
+    // A model that declares the koi filters, so the relation is allowed.
+    $pond = new class extends Pond
+    {
+        protected $table = 'ponds';
+
+        protected static function filterResolver(): Closure
+        {
+            return fn (): array => relationGroupFilters();
+        }
+
+        public function kois(): HasMany
+        {
+            return $this->hasMany(Koi::class, 'pond_id');
+        }
+    };
+    $hasNone = FilterSelection::make()->withGroup(FilterGroup::hasNone('kois'));
+    $doesntHave = FilterSelection::make()->withGroup(FilterGroup::doesntHave('kois')
+        ->add(PondKoiStatusFilter::value()->is('active')));
+    $names = fn (FilterSelection $selection): array => $pond::query()->applyFilters($selection)->orderBy('name')->pluck('name')->all();
+
+    // The flat path of applyFilters() must not drop the relation of the root group.
+    expect($names($hasNone))->toBe(['D'])
+        ->and($names($doesntHave))->toBe(['C', 'D']);
 });
