@@ -114,6 +114,12 @@ the model, so an undeclared one is rejected before it is called: the applicators
 `InvalidArgumentException`, the resolver reports `UnknownRelation` (strict: exception,
 lenient: the group is left out, restrictive: the group matches nothing).
 
+Stored data whose relation cannot be read (an empty or non-string `relation`, an
+unknown `relation_mode`) throws `InvalidArgumentException` on loading. With
+`fromJson($json, lenient: true)` the group keeps the data as given, survives saving, is
+reported by the resolver as `UnresolvedRelation` (handled like `UnknownRelation`) and
+cannot be applied before that (`LogicException`), like an unknown match mode.
+
 The check always looks at the filters registered for the filtered model. A relation
 group inside a relation group names a relation of the *related* model (`pond` on a
 koi, inside `whereHas('kois')`), so it is only accepted when a registered filter

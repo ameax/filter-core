@@ -30,7 +30,9 @@ use Ameax\FilterCore\Selections\FilterSelection;
  *   group matches nothing instead.
  *
  * Relation groups keep their relation. A filter with a relation scope that stands in a
- * group for another relation is a finding of its own (OutOfScope).
+ * group for another relation is a finding of its own (OutOfScope); a group whose
+ * relation data a lenient load could not read is one too (UnresolvedRelation) and is
+ * treated like an undeclared relation.
  *
  * What resolves is safe to apply: the applicators find nothing left to reject.
  */
@@ -95,6 +97,17 @@ final class Resolver
      */
     private function resolveGroup(FilterGroup $group, array $path, Diagnostics $diagnostics, ?string $relation): ?FilterGroup
     {
+        $unresolved = $group->getUnresolvedRelation();
+        if ($unresolved !== null) {
+            $mode = $unresolved['relation_mode'];
+            $diagnostics->add(new Diagnostic(
+                DiagnosticCode::UnresolvedRelation, $path, '', is_string($mode) ? $mode : (string) json_encode($mode),
+                $unresolved['relation'], (string) $group->unresolvedRelationReason()
+            ));
+
+            return $this->restrictive ? FilterGroup::and()->add(NeverFilter::condition()) : null;
+        }
+
         $own = $group->getRelation();
         if ($own !== null && ! $this->declaresRelation($own)) {
             $diagnostics->add(new Diagnostic(

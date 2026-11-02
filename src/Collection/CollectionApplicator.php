@@ -18,6 +18,7 @@ use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Applies filter values to Laravel Collections.
@@ -169,6 +170,10 @@ final class CollectionApplicator
      */
     public function applyGroup(Collection $collection, FilterGroup $group): Collection
     {
+        $unresolved = $group->unresolvedRelationReason();
+        if ($unresolved !== null) {
+            throw new LogicException($unresolved.' and cannot be applied. Resolve the selection first.');
+        }
         if ($group->isEmpty()) {
             return $collection;
         }

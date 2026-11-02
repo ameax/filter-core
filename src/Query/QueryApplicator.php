@@ -21,6 +21,7 @@ use Ameax\FilterCore\Selections\FilterSelection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Applies filter values to Eloquent queries.
@@ -360,6 +361,10 @@ final class QueryApplicator
      */
     public function applyGroup(Builder|QueryBuilder $query, FilterGroup $group): void
     {
+        $unresolved = $group->unresolvedRelationReason();
+        if ($unresolved !== null) {
+            throw new LogicException($unresolved.' and cannot be applied. Resolve the selection first.');
+        }
         if ($group->isEmpty()) {
             return;
         }

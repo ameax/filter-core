@@ -26,4 +26,7 @@ enum DiagnosticCode: string
 
     /** The group uses a relation that no registered filter declares. */
     case UnknownRelation = 'unknown_relation';
+
+    /** The group's relation data could not be read on a lenient load: empty relation or unknown relation mode. */
+    case UnresolvedRelation = 'unresolved_relation';
 }

@@ -314,3 +314,37 @@ it('applies a relation group at the root through applyFilters() like applySelect
     expect($names($hasNone))->toBe(['D'])
         ->and($names($doesntHave))->toBe(['C', 'D']);
 });
+
+it('keeps relation data a lenient read cannot resolve and reports it, like an unknown match mode', function () {
+    $cases = [
+        'empty relation' => ['relation' => '', 'relation_mode' => 'has_none'],
+        'relation not a string' => ['relation' => ['kois'], 'relation_mode' => 'has'],
+        'unknown mode' => ['relation' => 'kois', 'relation_mode' => 'sometimes'],
+    ];
+    foreach ($cases as $label => $relationData) {
+        $json = json_encode(['group' => ['operator' => 'and', 'items' => [
+            $relationData + ['operator' => 'and', 'items' => []],
+            ['filter' => PondWaterTypeFilter::key(), 'mode' => 'is', 'value' => 'salt'],
+        ]]]);
+
+        // Strict: one clear exception instead of ValueError or "Array to string conversion".
+        expect(fn () => FilterSelection::fromJson($json))->toThrow(InvalidArgumentException::class, '', $label);
+
+        $selection = FilterSelection::fromJson($json, lenient: true);
+        $resolver = Resolver::for(relationGroupFilters());
+        $lenient = $resolver->resolve($selection, FilterContext::lenient());
+        $restrictive = $resolver->resolve($selection, FilterContext::restrictive());
+
+        expect($selection->getGroup()->getItems()[0]->isRelationGroup())->toBeTrue($label)
+            // survives loading and saving as given
+            ->and(FilterSelection::fromJson($selection->toJson(), lenient: true)->toArray())->toBe($selection->toArray(), $label)
+            // is not applied as it stands
+            ->and(fn () => relationGroupQuery($selection))->toThrow(LogicException::class)
+            ->and(fn () => relationGroupCollection($selection))->toThrow(LogicException::class)
+            ->and(fn () => $resolver->resolve($selection))->toThrow(SelectionNotApplicableException::class)
+            // lenient: the group is left out, restrictive: it matches nothing
+            ->and($lenient->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::UnresolvedRelation, $label)
+            ->and(relationGroupBoth($lenient->selection()))->toBe(['C', 'D'], $label)
+            ->and($restrictive->applyTo(Pond::query())->count())->toBe(0, $label);
+    }
+});
