@@ -16,6 +16,7 @@ use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Query\ValuePreparer;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use LogicException;
@@ -181,6 +182,7 @@ final class CollectionApplicator
         $relation = $group->getRelation();
         if ($relation !== null) {
             $this->guardRelation($relation);
+            self::loadMissing($collection, $relation);
 
             // Same semantics as the query: the group's conditions hold for one related item.
             return $collection->filter(function (mixed $item) use ($relation, $group): bool {
@@ -311,6 +313,7 @@ final class CollectionApplicator
 
         $scope = $filter?->relationScope();
         if ($scope !== null && $scope !== $this->currentRelation) {
+            self::loadMissing($collection, $scope);
             // "None of": no related item has any of the values (as in the query).
             $none = $matchMode instanceof NoneMatchMode;
             $mode = $none ? new AnyMatchMode : $matchMode;
@@ -325,7 +328,21 @@ final class CollectionApplicator
     }
 
     /**
-     * The related items of an item, as a collection.
+     * Load a relation the models of an Eloquent collection do not have yet: one query
+     * instead of one per item, and no lazy loading (Model::preventLazyLoading()).
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     */
+    protected static function loadMissing(Collection $collection, string $relation): void
+    {
+        if ($collection instanceof EloquentCollection) {
+            $collection->loadMissing($relation);
+        }
+    }
+
+    /**
+     * The related items of an item, as a collection: the loaded relation of a model, or
+     * the key of an array. An item without them has no related items.
      *
      * @return Collection<int|string, mixed>
      */

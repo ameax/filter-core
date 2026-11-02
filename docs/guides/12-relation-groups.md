@@ -100,8 +100,10 @@ The resolver keeps the relation of every group (see [Resolution](11-resolution.m
 ## Collections
 
 `CollectionApplicator` gives the same result in memory: it reads the related records
-from the item (`data_get($item, $relation)`, e.g. an eager-loaded relation) and applies
-the group to them.
+from the item and applies the group to them. On an Eloquent collection a relation the
+models do not have yet is loaded first, in one query for all of them (`loadMissing()`),
+so no lazy loading happens. Array items carry the related records under the relation's
+key (`data_get($item, $relation)`); an item without that key has no related records.
 
 ## Requirements
 

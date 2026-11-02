@@ -17,7 +17,9 @@ use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
 use Closure;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /*
  * Relation groups: the conditions of a group bound to a relation hold for one and the
@@ -346,5 +348,28 @@ it('keeps relation data a lenient read cannot resolve and reports it, like an un
             ->and($lenient->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::UnresolvedRelation, $label)
             ->and(relationGroupBoth($lenient->selection()))->toBe(['C', 'D'], $label)
             ->and($restrictive->applyTo(Pond::query())->count())->toBe(0, $label);
+    }
+});
+
+it('loads a relation the collection items do not have yet, in one query and without lazy loading', function () {
+    $relationGroup = FilterSelection::make()->whereHas('kois', fn (FilterGroup $koi) => $koi->where(PondKoiStatusFilter::class)->is('active'));
+    $scoped = FilterSelection::make()->where(PondKoiStatusFilter::class)->none(['active']);
+    $names = function (FilterSelection $selection): array {
+        $names = CollectionApplicator::for(Pond::all())->withFilters(relationGroupFilters())->applySelection($selection)->getCollection()->pluck('name')->all();
+        sort($names);
+
+        return $names;
+    };
+
+    Model::preventLazyLoading(true);
+    DB::enableQueryLog();
+    try {
+        DB::flushQueryLog();
+        expect($names($relationGroup))->toBe(['A', 'B'])
+            ->and(DB::getQueryLog())->toHaveCount(2) // ponds, then their kois in one go
+            ->and($names($scoped))->toBe(['C', 'D']);
+    } finally {
+        Model::preventLazyLoading(false);
+        DB::disableQueryLog();
     }
 });
