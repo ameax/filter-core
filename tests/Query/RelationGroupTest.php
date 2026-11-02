@@ -16,7 +16,6 @@ use Ameax\FilterCore\Tests\Filters\PondKoiStatusFilter;
 use Ameax\FilterCore\Tests\Filters\PondWaterTypeFilter;
 use Ameax\FilterCore\Tests\Models\Koi;
 use Ameax\FilterCore\Tests\Models\Pond;
-use Closure;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
@@ -88,6 +87,20 @@ it('applies the conditions of a relation group to the same related record', func
     $selection = FilterSelection::make()->whereHas('kois', function (FilterGroup $koi) {
         $koi->where(PondKoiStatusFilter::class)->is('active');
         $koi->where(PondKoiCountFilter::class)->gt(5);
+    });
+
+    expect(relationGroupBoth($selection))->toBe(['A']);
+});
+
+it('keeps the relation of a group for a plain subgroup nested in it', function () {
+    // "active AND (count > 8 OR name Asagi)" on one koi: only Showa (active, 10).
+    // Per koi instead of per pond: B would match too (Kohaku active, Sanke 9).
+    $selection = FilterSelection::make()->whereHas('kois', function (FilterGroup $koi) {
+        $koi->where(PondKoiStatusFilter::class)->is('active');
+        $koi->orWhere(function (FilterGroup $either) {
+            $either->where(PondKoiCountFilter::class)->gt(8);
+            $either->where(PondKoiNameFilter::class)->is('Asagi');
+        });
     });
 
     expect(relationGroupBoth($selection))->toBe(['A']);
@@ -175,14 +188,27 @@ it('keeps the relation of a group through resolution and drops what cannot be ap
         ->and($resolved->applyTo(Pond::query())->orderBy('name')->pluck('name')->all())->toBe(['A', 'B']);
 });
 
-it('reports a scoped filter in a group for another relation', function () {
+it('reports a scoped filter in a group for another relation under every policy', function () {
+    // A koi filter (scope "kois") inside a group bound to a koi's pond.
     $selection = FilterSelection::make()->whereHas('pond', function (FilterGroup $group) {
         $group->where(PondKoiStatusFilter::class)->is('active');
     });
+    $resolver = Resolver::for([...relationGroupFilters(), PondWaterTypeFilter::via('pond')]);
 
-    $resolved = Resolver::for([...relationGroupFilters(), PondWaterTypeFilter::via('pond')])->resolve($selection, FilterContext::lenient());
+    expect(fn () => $resolver->resolve($selection, FilterContext::strict()))->toThrow(SelectionNotApplicableException::class, 'PondKoiStatusFilter');
 
-    expect($resolved->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::OutOfScope);
+    $lenient = $resolver->resolve($selection, FilterContext::lenient());
+    $restrictive = $resolver->resolve($selection, FilterContext::restrictive());
+
+    expect($lenient->diagnostics()->all()[0]->toArray())->toBe([
+        'code' => 'out_of_scope', 'path' => [0, 0], 'filter' => 'PondKoiStatusFilter', 'mode' => 'is', 'value' => 'active',
+        'message' => "Filter 'PondKoiStatusFilter' belongs to relation 'kois', not 'pond'", 'details' => [],
+    ])
+        // lenient: the group is left out, so every koi; restrictive: no koi has such a pond
+        ->and($lenient->selection()->hasFilters())->toBeFalse()
+        ->and($lenient->applyTo(Koi::query())->count())->toBe(4)
+        ->and($restrictive->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::OutOfScope)
+        ->and($restrictive->applyTo(Koi::query())->count())->toBe(0);
 });
 
 it('never widens a negated relation group under the restrictive policy', function () {
@@ -319,18 +345,18 @@ it('applies a relation group at the root through applyFilters() like applySelect
 
 it('keeps relation data a lenient read cannot resolve and reports it, like an unknown match mode', function () {
     $cases = [
-        'empty relation' => ['relation' => '', 'relation_mode' => 'has_none'],
-        'relation not a string' => ['relation' => ['kois'], 'relation_mode' => 'has'],
-        'unknown mode' => ['relation' => 'kois', 'relation_mode' => 'sometimes'],
+        'empty relation' => [['relation' => '', 'relation_mode' => 'has_none'], "The relation of a group must be a non-empty string, got ''"],
+        'relation not a string' => [['relation' => ['kois'], 'relation_mode' => 'has'], 'The relation of a group must be a non-empty string, got ["kois"]'],
+        'unknown mode' => [['relation' => 'kois', 'relation_mode' => 'sometimes'], "Relation mode 'sometimes' is unknown"],
     ];
-    foreach ($cases as $label => $relationData) {
+    foreach ($cases as $label => [$relationData, $reason]) {
         $json = json_encode(['group' => ['operator' => 'and', 'items' => [
             $relationData + ['operator' => 'and', 'items' => []],
             ['filter' => PondWaterTypeFilter::key(), 'mode' => 'is', 'value' => 'salt'],
         ]]]);
 
         // Strict: one clear exception instead of ValueError or "Array to string conversion".
-        expect(fn () => FilterSelection::fromJson($json))->toThrow(InvalidArgumentException::class, '', $label);
+        expect(fn () => FilterSelection::fromJson($json))->toThrow(InvalidArgumentException::class, $reason, $label);
 
         $selection = FilterSelection::fromJson($json, lenient: true);
         $resolver = Resolver::for(relationGroupFilters());
@@ -345,7 +371,12 @@ it('keeps relation data a lenient read cannot resolve and reports it, like an un
             ->and(fn () => relationGroupCollection($selection))->toThrow(LogicException::class)
             ->and(fn () => $resolver->resolve($selection))->toThrow(SelectionNotApplicableException::class)
             // lenient: the group is left out, restrictive: it matches nothing
-            ->and($lenient->diagnostics()->all()[0]->code)->toBe(DiagnosticCode::UnresolvedRelation, $label)
+            ->and($lenient->diagnostics()->count())->toBe(1, $label)
+            ->and($lenient->diagnostics()->all()[0]->toArray())->toBe([
+                'code' => 'unresolved_relation', 'path' => [0], 'filter' => '',
+                'mode' => $relationData['relation_mode'], 'value' => $relationData['relation'],
+                'message' => $reason, 'details' => [],
+            ], $label)
             ->and(relationGroupBoth($lenient->selection()))->toBe(['C', 'D'], $label)
             ->and($restrictive->applyTo(Pond::query())->count())->toBe(0, $label);
     }
