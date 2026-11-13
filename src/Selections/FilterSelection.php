@@ -740,6 +740,14 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
         }
 
         $explanation = implode($operator, $parts);
+
+        // Relation data a lenient load could not read: say so, or the conditions would
+        // read as plain ones ("has no active koi" as "status is active").
+        $unresolved = $group->unresolvedRelationReason();
+        if ($unresolved !== null) {
+            return $explanation === '' ? "UNRESOLVED ({$unresolved})" : "UNRESOLVED ({$unresolved}) WHERE ({$explanation})";
+        }
+
         $relation = $group->getRelation();
 
         // An empty "has" or "doesn't have" group is not applied, so it explains as nothing.

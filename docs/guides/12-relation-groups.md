@@ -97,6 +97,10 @@ The resolver keeps the relation of every group (see [Resolution](11-resolution.m
 - restrictive: the condition matches nothing. Inside a "doesn't have" group that would
   turn the group into "matches every record", so the whole group matches nothing instead
 
+`explain()` shows the relation and mode of each group: `HAS contacts WHERE (…)`,
+`DOESNT HAVE contacts WHERE (…)`, `HAS NO contacts`. A group whose relation data a
+lenient load could not read shows as `UNRESOLVED (<reason>) WHERE (…)`.
+
 ## Collections
 
 `CollectionApplicator` gives the same result in memory: it reads the related records

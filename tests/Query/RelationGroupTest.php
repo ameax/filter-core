@@ -317,6 +317,21 @@ it('explains relation groups with their relation and mode', function () {
     );
 });
 
+it('explains a group whose relation data cannot be resolved as unresolved, with the reason', function () {
+    $selection = FilterSelection::fromJson(json_encode(['group' => ['operator' => 'and', 'items' => [
+        ['operator' => 'and', 'relation' => 'kois', 'relation_mode' => 'has_none', 'items' => [
+            ['filter' => 'PondKoiStatusFilter', 'mode' => 'is', 'value' => 'active'],
+        ]],
+        ['operator' => 'and', 'relation' => 'kois', 'relation_mode' => 'sometimes', 'items' => []],
+    ]]]), lenient: true);
+
+    // Not "PondKoiStatusFilter IS 'active'": that reads as the opposite of "has no active koi".
+    expect($selection->explain())->toBe(
+        "(UNRESOLVED (A 'has none' group for relation 'kois' takes no conditions) WHERE (PondKoiStatusFilter IS 'active'))"
+        ." AND (UNRESOLVED (Relation mode 'sometimes' is unknown))"
+    );
+});
+
 it('applies a relation group at the root through applyFilters() like applySelection()', function () {
     // A model that declares the koi filters, so the relation is allowed.
     $pond = new class extends Pond
