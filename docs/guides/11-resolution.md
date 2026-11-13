@@ -54,6 +54,14 @@ records the selection was meant to exclude, for example a list built on a saved 
 | `UnknownMode` | the match mode is unknown (see lenient loading) |
 | `ModeNotAllowed` | the filter does not offer this match mode |
 | `InvalidValue` | sanitizing, `typedValue()` or the validation rules reject the value, e.g. a deleted option |
+| `OutOfScope` | a filter with a relation scope stands in a relation group for another relation |
+| `UnknownRelation` | a relation group uses a relation that no registered filter declares |
+| `UnresolvedRelation` | a lenient load could not read a group's relation data: empty or non-string relation, unknown relation mode, a "has none" group with conditions |
+
+The relation codes are described in [Relation groups](12-relation-groups.md).
+`UnknownRelation` and `UnresolvedRelation` concern a whole group, so their filter key
+is empty: the mode is the group's relation mode and the value its relation, both as
+stored.
 
 Each `Diagnostic` carries the code, the path (item positions from the root group, e.g.
 `[1, 0]`), filter key, mode, value, a message and validation details.

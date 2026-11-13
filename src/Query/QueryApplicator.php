@@ -13,6 +13,7 @@ use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
+use Ameax\FilterCore\MatchModes\AnyMatchMode;
 use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Resolution\FilterContext;
 use Ameax\FilterCore\Selections\FilterGroup;
@@ -20,6 +21,7 @@ use Ameax\FilterCore\Selections\FilterSelection;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Query\Builder as QueryBuilder;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Applies filter values to Eloquent queries.
@@ -36,6 +38,9 @@ final class QueryApplicator
     protected array $appliedFilters = [];
 
     protected ?FilterContext $context = null;
+
+    /** The relation whose records are being filtered (inside a relation group), if any. */
+    protected ?string $currentRelation = null;
 
     /**
      * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
@@ -139,7 +144,7 @@ final class QueryApplicator
 
         // Check if this filter has a relation
         $filter = $this->filters[$filterKey] ?? null;
-        $relation = $filter?->getRelation();
+        $relation = $this->ownRelation($filter);
 
         // Sanitize, type-check, and validate value if filter instance is available
         if ($filter !== null) {
@@ -151,23 +156,27 @@ final class QueryApplicator
             $value = $value->toArray();
         }
 
-        // First, check if filter has custom apply logic
-        if ($filter !== null && $this->applyCustom($filter, $this->query, $matchMode, $value)) {
-            // Custom logic was applied - done
-        } elseif ($filter !== null && $relation !== null && $this->query instanceof Builder) {
-            // Apply via relation with appropriate mode (whereHas, whereDoesntHave)
-            $this->applyRelationFilter(
-                $this->query,
-                $relation,
-                $filter->getRelationMode(),
-                $column,
-                $matchMode,
-                $value
-            );
-        } else {
-            // Apply match mode logic directly
-            $matchMode->apply($this->query, $column, $value);
-        }
+        $condition = function (Builder|QueryBuilder $q, ?MatchModeContract $mode = null) use ($filter, $matchMode, $column, $value, $relation): void {
+            $mode ??= $matchMode;
+            // First, check if filter has custom apply logic
+            if ($filter !== null && $this->applyCustom($filter, $q, $mode, $value)) {
+                // Custom logic was applied - done
+            } elseif ($filter !== null && $relation !== null && $q instanceof Builder) {
+                // Apply via relation with appropriate mode (whereHas, whereDoesntHave)
+                $this->applyRelationFilter(
+                    $q,
+                    $relation,
+                    $filter->getRelationMode(),
+                    $column,
+                    $mode,
+                    $value
+                );
+            } else {
+                // Apply match mode logic directly
+                $mode->apply($q, $column, $value);
+            }
+        };
+        $this->applyInScope($this->query, $filter, $condition, $matchMode);
 
         $this->appliedFilters[] = $filterValue;
 
@@ -339,7 +348,7 @@ final class QueryApplicator
         // Always one parenthesised group: an OR selection applied straight onto a
         // query that already has conditions would read "a AND b OR c" and bypass them.
         $this->query->where(function (Builder|QueryBuilder $q) use ($selection): void {
-            $this->applyGroup($q, $selection->getGroup());
+            $this->applyGroupOrRelation($q, $selection->getGroup());
         });
 
         return $this;
@@ -352,6 +361,10 @@ final class QueryApplicator
      */
     public function applyGroup(Builder|QueryBuilder $query, FilterGroup $group): void
     {
+        $unresolved = $group->unresolvedRelationReason();
+        if ($unresolved !== null) {
+            throw new LogicException($unresolved.' and cannot be applied. Resolve the selection first.');
+        }
         if ($group->isEmpty()) {
             return;
         }
@@ -397,7 +410,7 @@ final class QueryApplicator
         $value = $filterValue->getValue();
 
         $filter = $this->filters[$filterKey] ?? null;
-        $relation = $filter?->getRelation();
+        $relation = $this->ownRelation($filter);
 
         if ($filter !== null) {
             $value = ValuePreparer::prepare($filter, $filterKey, $matchMode, $value);
@@ -408,8 +421,9 @@ final class QueryApplicator
         }
 
         // Build the condition closure
-        $condition = function (Builder|QueryBuilder $q) use ($filter, $matchMode, $column, $value, $relation): void {
-            if ($filter !== null && $this->applyCustom($filter, $q, $matchMode, $value)) {
+        $condition = function (Builder|QueryBuilder $q, ?MatchModeContract $mode = null) use ($filter, $matchMode, $column, $value, $relation): void {
+            $mode ??= $matchMode;
+            if ($filter !== null && $this->applyCustom($filter, $q, $mode, $value)) {
                 // Custom logic was applied
             } elseif ($filter !== null && $relation !== null && $q instanceof Builder) {
                 $this->applyRelationFilter(
@@ -417,19 +431,19 @@ final class QueryApplicator
                     $relation,
                     $filter->getRelationMode(),
                     $column,
-                    $matchMode,
+                    $mode,
                     $value
                 );
             } else {
-                $matchMode->apply($q, $column, $value);
+                $mode->apply($q, $column, $value);
             }
         };
 
         // Apply with AND or OR
         if ($useOr) {
-            $query->orWhere(fn ($q) => $condition($q));
+            $query->orWhere(fn ($q) => $this->applyInScope($q, $filter, $condition, $matchMode));
         } else {
-            $query->where(fn ($q) => $condition($q));
+            $query->where(fn ($q) => $this->applyInScope($q, $filter, $condition, $matchMode));
         }
 
         $this->appliedFilters[] = $filterValue;
@@ -450,7 +464,7 @@ final class QueryApplicator
         }
 
         $condition = function (Builder|QueryBuilder $q) use ($group): void {
-            $this->applyGroup($q, $group);
+            $this->applyGroupOrRelation($q, $group);
         };
 
         if ($useOr) {
@@ -494,6 +508,113 @@ final class QueryApplicator
             RelationModeEnum::DOESNT_HAVE => $query->whereDoesntHave($relation, $callback),
             RelationModeEnum::HAS_NONE => $query->whereDoesntHave($relation),
         };
+    }
+
+    /**
+     * Apply a group; a group bound to a relation becomes one whereHas() (or
+     * whereDoesntHave()) whose conditions all hold for the same related record.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
+     */
+    protected function applyGroupOrRelation(Builder|QueryBuilder $query, FilterGroup $group): void
+    {
+        $relation = $group->getRelation();
+        if ($relation === null) {
+            $this->applyGroup($query, $group);
+
+            return;
+        }
+
+        if (! $query instanceof Builder) {
+            throw new InvalidArgumentException("The group for relation '{$relation}' needs an Eloquent query");
+        }
+
+        $this->guardRelation($relation);
+
+        $inRelation = function (Builder $relQuery) use ($relation, $group): void {
+            $this->withinRelation($relation, fn () => $this->applyGroup($relQuery, $group));
+        };
+
+        match ($group->getRelationMode()) {
+            RelationModeEnum::HAS => $query->whereHas($relation, $inRelation),
+            RelationModeEnum::DOESNT_HAVE => $query->whereDoesntHave($relation, $inRelation),
+            RelationModeEnum::HAS_NONE => $query->whereDoesntHave($relation),
+        };
+    }
+
+    /**
+     * Run a condition where the filter's columns live: directly when the query already
+     * filters the records of the filter's relation scope, through whereHas() otherwise.
+     *
+     * @param  Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder  $query
+     * @param  callable(Builder<covariant \Illuminate\Database\Eloquent\Model>|QueryBuilder, ?MatchModeContract=): void  $condition  takes a match mode that replaces the filter's own
+     */
+    protected function applyInScope(Builder|QueryBuilder $query, ?Filter $filter, callable $condition, ?MatchModeContract $matchMode = null): void
+    {
+        $scope = $filter?->relationScope();
+        if ($filter === null || $scope === null || $scope === $this->currentRelation) {
+            $condition($query);
+
+            return;
+        }
+
+        if (! $query instanceof Builder) {
+            throw new InvalidArgumentException("Filter '{$filter->resolveKey()}' belongs to relation '{$scope}' and needs an Eloquent query");
+        }
+
+        // "None of" must hold for every related record, as for via() filters
+        // (applyRelationFilter()): no related record has any of the values.
+        if ($matchMode instanceof NoneMatchMode) {
+            $query->whereDoesntHave($scope, function (Builder $relQuery) use ($scope, $condition): void {
+                $this->withinRelation($scope, fn () => $condition($relQuery, new AnyMatchMode));
+            });
+
+            return;
+        }
+
+        $query->whereHas($scope, function (Builder $relQuery) use ($scope, $condition): void {
+            $this->withinRelation($scope, fn () => $condition($relQuery));
+        });
+    }
+
+    /**
+     * The relation a via() filter applies through, unless the query already filters
+     * the records of that relation (inside a group bound to it).
+     */
+    protected function ownRelation(?Filter $filter): ?string
+    {
+        $relation = $filter?->getRelation();
+
+        return $relation !== null && $relation === $this->currentRelation ? null : $relation;
+    }
+
+    /**
+     * A relation group calls the relation by name on the model, so only relations
+     * that a registered filter declares are allowed.
+     */
+    protected function guardRelation(string $relation): void
+    {
+        foreach ($this->filters as $filter) {
+            if ($filter->belongsToRelation($relation)) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException("Relation '{$relation}' is not declared by any registered filter");
+    }
+
+    /**
+     * @param  callable(): void  $callback
+     */
+    protected function withinRelation(string $relation, callable $callback): void
+    {
+        $outer = $this->currentRelation;
+        $this->currentRelation = $relation;
+        try {
+            $callback();
+        } finally {
+            $this->currentRelation = $outer;
+        }
     }
 
     /**

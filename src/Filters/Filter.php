@@ -221,6 +221,31 @@ abstract class Filter
     }
 
     /**
+     * The relation whose records this filter's columns belong to, or null for the
+     * filtered model itself.
+     *
+     * Inside a group bound to that relation (FilterGroup::has()) the filter applies to
+     * the related record directly, so several conditions hold for the same record.
+     * Anywhere else it wraps itself in whereHas() on that relation. Unlike via(), this
+     * is a property of the filter: it never applies to the wrong table.
+     */
+    public function relationScope(): ?string
+    {
+        return null;
+    }
+
+    /**
+     * Whether this filter declares the relation, through relationScope() or via().
+     *
+     * Relation groups may only use relations a registered filter declares: the name
+     * of a stored group becomes a method call on the model.
+     */
+    public function belongsToRelation(string $relation): bool
+    {
+        return $this->relationScope() === $relation || $this->getRelation() === $relation;
+    }
+
+    /**
      * Check if this filter applies via a relation.
      */
     public function hasRelation(): bool

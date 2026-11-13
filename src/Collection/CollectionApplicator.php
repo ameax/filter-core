@@ -8,13 +8,18 @@ use Ameax\FilterCore\Data\BetweenValue;
 use Ameax\FilterCore\Data\FilterDefinition;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
+use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
+use Ameax\FilterCore\MatchModes\AnyMatchMode;
+use Ameax\FilterCore\MatchModes\NoneMatchMode;
 use Ameax\FilterCore\Query\ValuePreparer;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
+use LogicException;
 
 /**
  * Applies filter values to Laravel Collections.
@@ -139,6 +144,9 @@ final class CollectionApplicator
         return $this;
     }
 
+    /** The relation whose items are being filtered (inside a relation group), if any. */
+    protected ?string $currentRelation = null;
+
     /**
      * Apply a FilterSelection to the collection.
      *
@@ -163,10 +171,42 @@ final class CollectionApplicator
      */
     public function applyGroup(Collection $collection, FilterGroup $group): Collection
     {
+        $unresolved = $group->unresolvedRelationReason();
+        if ($unresolved !== null) {
+            throw new LogicException($unresolved.' and cannot be applied. Resolve the selection first.');
+        }
         if ($group->isEmpty()) {
             return $collection;
         }
 
+        $relation = $group->getRelation();
+        if ($relation !== null) {
+            $this->guardRelation($relation);
+            self::loadMissing($collection, $relation);
+
+            // Same semantics as the query: the group's conditions hold for one related item.
+            return $collection->filter(function (mixed $item) use ($relation, $group): bool {
+                $related = self::related($item, $relation);
+
+                return match ($group->getRelationMode()) {
+                    RelationModeEnum::HAS => $this->withinRelation($relation, fn () => $this->applyItems($related, $group))->isNotEmpty(),
+                    RelationModeEnum::DOESNT_HAVE => $this->withinRelation($relation, fn () => $this->applyItems($related, $group))->isEmpty(),
+                    RelationModeEnum::HAS_NONE => $related->isEmpty(),
+                };
+            });
+        }
+
+        return $this->applyItems($collection, $group);
+    }
+
+    /**
+     * Apply the items of a group with its operator, ignoring a relation binding.
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     * @return Collection<int|string, mixed>
+     */
+    protected function applyItems(Collection $collection, FilterGroup $group): Collection
+    {
         $items = $group->getItems();
         $isOr = $group->getOperator() === GroupOperatorEnum::OR;
 
@@ -271,7 +311,83 @@ final class CollectionApplicator
 
         $this->appliedFilters[] = $filterValue;
 
+        $scope = $filter?->relationScope();
+        if ($scope !== null && $scope !== $this->currentRelation) {
+            self::loadMissing($collection, $scope);
+            // "None of": no related item has any of the values (as in the query).
+            $none = $matchMode instanceof NoneMatchMode;
+            $mode = $none ? new AnyMatchMode : $matchMode;
+
+            return $collection->filter(fn (mixed $item): bool => $this->withinRelation(
+                $scope,
+                fn () => $mode->applyToCollection(self::related($item, $scope), $column, $value)
+            )->isNotEmpty() !== $none);
+        }
+
         return $matchMode->applyToCollection($collection, $column, $value);
+    }
+
+    /**
+     * Load a relation the models of an Eloquent collection do not have yet: one query
+     * instead of one per item, and no lazy loading (Model::preventLazyLoading()).
+     *
+     * @param  Collection<int|string, mixed>  $collection
+     */
+    protected static function loadMissing(Collection $collection, string $relation): void
+    {
+        if ($collection instanceof EloquentCollection) {
+            $collection->loadMissing($relation);
+        }
+    }
+
+    /**
+     * The related items of an item, as a collection: the loaded relation of a model, or
+     * the key of an array. An item without them has no related items.
+     *
+     * @return Collection<int|string, mixed>
+     */
+    protected static function related(mixed $item, string $relation): Collection
+    {
+        $related = data_get($item, $relation);
+        if ($related instanceof Collection) {
+            return $related;
+        }
+        if ($related === null) {
+            return new Collection;
+        }
+
+        return new Collection(is_iterable($related) ? $related : [$related]);
+    }
+
+    /**
+     * Same rule as the query: only relations that a registered filter declares.
+     */
+    protected function guardRelation(string $relation): void
+    {
+        foreach ($this->filters as $filter) {
+            if ($filter->belongsToRelation($relation)) {
+                return;
+            }
+        }
+
+        throw new InvalidArgumentException("Relation '{$relation}' is not declared by any registered filter");
+    }
+
+    /**
+     * @template T
+     *
+     * @param  callable(): T  $callback
+     * @return T
+     */
+    protected function withinRelation(string $relation, callable $callback): mixed
+    {
+        $outer = $this->currentRelation;
+        $this->currentRelation = $relation;
+        try {
+            return $callback();
+        } finally {
+            $this->currentRelation = $outer;
+        }
     }
 
     /**
