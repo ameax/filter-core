@@ -21,6 +21,20 @@ class TestCase extends Orchestra
         $this->setUpDatabase();
     }
 
+    /**
+     * Close the database connection with the test, not with garbage collection.
+     *
+     * Each test runs in its own application whose connection stays open until
+     * the cycle collector runs; with hundreds of tests that exceeds the server's
+     * connection limit, depending on the test order.
+     */
+    protected function tearDown(): void
+    {
+        DB::disconnect('testing');
+
+        parent::tearDown();
+    }
+
     protected function getPackageProviders($app)
     {
         return [

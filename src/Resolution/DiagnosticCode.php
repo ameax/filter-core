@@ -23,4 +23,10 @@ enum DiagnosticCode: string
 
     /** The filter belongs to another relation than the group it stands in. */
     case OutOfScope = 'out_of_scope';
+
+    /** The group uses a relation that no registered filter declares. */
+    case UnknownRelation = 'unknown_relation';
+
+    /** The group's relation data could not be read on a lenient load: empty relation, unknown relation mode, or a "has none" group with conditions. */
+    case UnresolvedRelation = 'unresolved_relation';
 }

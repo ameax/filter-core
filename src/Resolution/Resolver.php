@@ -30,7 +30,9 @@ use Ameax\FilterCore\Selections\FilterSelection;
  *   group matches nothing instead.
  *
  * Relation groups keep their relation. A filter with a relation scope that stands in a
- * group for another relation is a finding of its own (OutOfScope).
+ * group for another relation is a finding of its own (OutOfScope); a group whose
+ * relation data a lenient load could not read is one too (UnresolvedRelation) and is
+ * treated like an undeclared relation.
  *
  * What resolves is safe to apply: the applicators find nothing left to reject.
  */
@@ -74,8 +76,10 @@ final class Resolver
         $diagnostics = new Diagnostics;
         $this->restrictive = $context->policy === ResolutionPolicy::Restrictive;
 
+        // A root group left out entirely becomes a plain empty one: a copy would keep a
+        // relation that was just reported and left out, and applying it would throw.
         $root = $this->resolveGroup($selection->getGroup(), [], $diagnostics, null)
-            ?? $selection->getGroup()->emptyCopy();
+            ?? new FilterGroup($selection->getGroup()->getOperator());
 
         if ($context->isStrict() && ! $diagnostics->isEmpty()) {
             throw new SelectionNotApplicableException($diagnostics);
@@ -95,8 +99,30 @@ final class Resolver
      */
     private function resolveGroup(FilterGroup $group, array $path, Diagnostics $diagnostics, ?string $relation): ?FilterGroup
     {
+        $unresolved = $group->getUnresolvedRelation();
+        if ($unresolved !== null) {
+            $mode = $unresolved['relation_mode'];
+            $diagnostics->add(new Diagnostic(
+                DiagnosticCode::UnresolvedRelation, $path, '', is_string($mode) ? $mode : (string) json_encode($mode),
+                $unresolved['relation'], (string) $group->unresolvedRelationReason()
+            ));
+
+            return $this->restrictive ? FilterGroup::and()->add(NeverFilter::condition()) : null;
+        }
+
+        $own = $group->getRelation();
+        if ($own !== null && ! $this->declaresRelation($own)) {
+            $diagnostics->add(new Diagnostic(
+                DiagnosticCode::UnknownRelation, $path, '', $group->getRelationMode()->value, $own,
+                "Relation '{$own}' is not declared by any registered filter"
+            ));
+
+            // Leaving it out widens under the restrictive policy, so it matches nothing.
+            return $this->restrictive ? FilterGroup::and()->add(NeverFilter::condition()) : null;
+        }
+
         $resolved = $group->emptyCopy();
-        $relation = $group->getRelation() ?? $relation;
+        $relation = $own ?? $relation;
         $findings = $diagnostics->count();
 
         foreach ($group->getItems() as $index => $item) {
@@ -131,6 +157,17 @@ final class Resolver
         }
 
         return $resolved->isEmpty() ? null : $resolved;
+    }
+
+    private function declaresRelation(string $relation): bool
+    {
+        foreach ($this->filters as $filter) {
+            if ($filter->belongsToRelation($relation)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
