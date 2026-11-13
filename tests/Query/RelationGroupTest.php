@@ -404,3 +404,28 @@ it('loads a relation the collection items do not have yet, in one query and with
         DB::disableQueryLog();
     }
 });
+
+it('applies what lenient resolution leaves of a root group whose relation it drops', function () {
+    $resolver = Resolver::for(relationGroupFilters());
+    $cases = [
+        'unresolved relation' => FilterSelection::fromJson(json_encode(['group' => [
+            'operator' => 'and', 'relation' => '', 'relation_mode' => 'has_none', 'items' => [],
+        ]]), lenient: true),
+        'undeclared relation' => FilterSelection::fromJson(json_encode(['group' => [
+            'operator' => 'and', 'relation' => 'kois.truncate', 'relation_mode' => 'has_none', 'items' => [],
+        ]])),
+    ];
+
+    foreach ($cases as $label => $selection) {
+        $lenient = $resolver->resolve($selection, FilterContext::lenient());
+        $restrictive = $resolver->resolve($selection, FilterContext::restrictive());
+
+        // Left out under lenient: every pond, and the finding is kept.
+        expect($lenient->diagnostics()->count())->toBe(1, $label)
+            ->and($lenient->selection()->getGroup()->isRelationGroup())->toBeFalse($label)
+            ->and(relationGroupBoth($lenient->selection()))->toBe(['A', 'B', 'C', 'D'], $label)
+            ->and($restrictive->applyTo(Pond::query())->count())->toBe(0, $label);
+    }
+
+    expect(Koi::count())->toBe(4);
+});

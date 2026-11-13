@@ -76,8 +76,10 @@ final class Resolver
         $diagnostics = new Diagnostics;
         $this->restrictive = $context->policy === ResolutionPolicy::Restrictive;
 
+        // A root group left out entirely becomes a plain empty one: a copy would keep a
+        // relation that was just reported and left out, and applying it would throw.
         $root = $this->resolveGroup($selection->getGroup(), [], $diagnostics, null)
-            ?? $selection->getGroup()->emptyCopy();
+            ?? new FilterGroup($selection->getGroup()->getOperator());
 
         if ($context->isStrict() && ! $diagnostics->isEmpty()) {
             throw new SelectionNotApplicableException($diagnostics);
