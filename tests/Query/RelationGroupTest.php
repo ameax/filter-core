@@ -429,3 +429,36 @@ it('applies what lenient resolution leaves of a root group whose relation it dro
 
     expect(Koi::count())->toBe(4);
 });
+
+it('reads a stored "has none" group with conditions as unresolvable relation data', function () {
+    $json = json_encode(['group' => ['operator' => 'and', 'items' => [
+        ['operator' => 'and', 'relation' => 'kois', 'relation_mode' => 'has_none', 'items' => [
+            ['filter' => 'PondKoiStatusFilter', 'mode' => 'is', 'value' => 'active'],
+        ]],
+        ['filter' => PondWaterTypeFilter::key(), 'mode' => 'is', 'value' => 'salt'],
+    ]]]);
+    $reason = "A 'has none' group for relation 'kois' takes no conditions";
+
+    // Strict: the same exception as for other unreadable relation data.
+    expect(fn () => FilterSelection::fromJson($json))->toThrow(InvalidArgumentException::class, $reason);
+
+    $selection = FilterSelection::fromJson($json, lenient: true);
+    $group = $selection->getGroup()->getItems()[0];
+    $resolver = Resolver::for(relationGroupFilters());
+    $lenient = $resolver->resolve($selection, FilterContext::lenient());
+
+    expect($group->isRelationGroup())->toBeTrue()
+        ->and($group->getRelation())->toBeNull()
+        ->and($group->unresolvedRelationReason())->toBe($reason)
+        // survives loading and saving as given, conditions included
+        ->and($selection->toArray()['group']['items'][0])->toBe(json_decode($json, true)['group']['items'][0])
+        ->and(FilterSelection::fromJson($selection->toJson(), lenient: true)->toArray())->toBe($selection->toArray())
+        ->and(fn () => relationGroupQuery($selection))->toThrow(LogicException::class, $reason)
+        ->and($lenient->diagnostics()->all()[0]->toArray())->toBe([
+            'code' => 'unresolved_relation', 'path' => [0], 'filter' => '', 'mode' => 'has_none', 'value' => 'kois',
+            'message' => $reason, 'details' => [],
+        ])
+        // lenient: the group is left out, restrictive: it matches nothing
+        ->and(relationGroupBoth($lenient->selection()))->toBe(['C', 'D'])
+        ->and($resolver->resolve($selection, FilterContext::restrictive())->applyTo(Pond::query())->count())->toBe(0);
+});

@@ -117,7 +117,8 @@ the model, so an undeclared one is rejected before it is called: the applicators
 lenient: the group is left out, restrictive: the group matches nothing).
 
 Stored data whose relation cannot be read (an empty or non-string `relation`, an
-unknown `relation_mode`) throws `InvalidArgumentException` on loading. With
+unknown `relation_mode`, a `has_none` group with conditions) throws
+`InvalidArgumentException` on loading. With
 `fromJson($json, lenient: true)` the group keeps the data as given, survives saving, is
 reported by the resolver as `UnresolvedRelation` (handled like `UnknownRelation`) and
 cannot be applied before that (`LogicException`), like an unknown match mode. When the

@@ -126,8 +126,12 @@ final class FilterGroup implements Arrayable, JsonSerializable
         if (! is_string($relation) || $relation === '') {
             return 'The relation of a group must be a non-empty string, got '.self::describe($relation);
         }
+        if (! is_string($mode) || RelationModeEnum::tryFrom($mode) === null) {
+            return 'Relation mode '.self::describe($mode).' is unknown';
+        }
 
-        return 'Relation mode '.self::describe($mode).' is unknown';
+        // Relation and mode are valid: the stored group is "has none" with conditions.
+        return "A 'has none' group for relation '{$relation}' takes no conditions";
     }
 
     private static function describe(mixed $value): string
@@ -138,14 +142,16 @@ final class FilterGroup implements Arrayable, JsonSerializable
     /**
      * @throws \InvalidArgumentException when the data cannot be read, unless lenient
      */
-    private function readRelation(mixed $relation, mixed $mode, bool $lenient): void
+    private function readRelation(mixed $relation, mixed $mode, bool $hasItems, bool $lenient): void
     {
         $resolvedMode = match (true) {
             $mode === null => RelationModeEnum::HAS,
             is_string($mode) => RelationModeEnum::tryFrom($mode),
             default => null,
         };
-        if (is_string($relation) && $relation !== '' && $resolvedMode !== null) {
+        // "Has none" takes no conditions; stored data that has some cannot be read either.
+        if (is_string($relation) && $relation !== '' && $resolvedMode !== null
+            && ! ($resolvedMode === RelationModeEnum::HAS_NONE && $hasItems)) {
             $this->forRelation($relation, $resolvedMode);
 
             return;
@@ -432,8 +438,9 @@ final class FilterGroup implements Arrayable, JsonSerializable
      *
      * @param  array{operator?: string, relation?: mixed, relation_mode?: mixed, items?: array<array<string, mixed>>}  $data
      * @param  bool  $lenient  see FilterValue::fromArray(); also keeps relation data that
-     *                         cannot be read (empty relation, unknown mode) for the Resolver
-     *                         to report (UnresolvedRelation) instead of throwing
+     *                         cannot be read (empty relation, unknown mode, a "has none"
+     *                         group with conditions) for the Resolver to report
+     *                         (UnresolvedRelation) instead of throwing
      */
     public static function fromArray(array $data, bool $lenient = false): self
     {
@@ -443,7 +450,7 @@ final class FilterGroup implements Arrayable, JsonSerializable
 
         $group = new self($operator);
         if (isset($data['relation'])) {
-            $group->readRelation($data['relation'], $data['relation_mode'] ?? null, $lenient);
+            $group->readRelation($data['relation'], $data['relation_mode'] ?? null, ($data['items'] ?? []) !== [], $lenient);
         }
 
         foreach ($data['items'] ?? [] as $itemData) {
