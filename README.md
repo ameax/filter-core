@@ -13,6 +13,7 @@ A powerful, type-safe filtering system for Laravel applications. Filter Core pro
 - **18 Match Modes**: IS, IS_NOT, ANY, NONE, CONTAINS, GT, LT, BETWEEN, REGEX, EMPTY, DATE_RANGE, and more
 - **AND/OR Logic**: Complex nested filter groups with FilterSelection
 - **Relation Filtering**: Filter through Eloquent relationships with `whereHas()`
+- **Relation Groups**: Several conditions on one and the same related record (`whereHas`, `whereDoesntHave`, `whereHasNone`)
 - **Collection Filtering**: Apply the same filter logic to in-memory Collections
 - **Date Filtering**: Quick selections, relative ranges, fiscal years, timezone support
 - **Decimal Filtering**: Precision control, stored-as-integer support for prices
@@ -174,6 +175,7 @@ $selection->debug();
 | [Advanced Usage](docs/guides/09-advanced-usage.md) | Custom logic and extensibility |
 | [Date Filter](docs/guides/10-date-filter.md) | Date filtering with timezone support |
 | [Resolution](docs/guides/11-resolution.md) | Strict and lenient checking, diagnostics, context |
+| [Relation Groups](docs/guides/12-relation-groups.md) | Several conditions on the same related record |
 
 ## Quick Reference
 

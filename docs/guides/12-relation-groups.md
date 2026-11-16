@@ -1,0 +1,135 @@
+# Relation groups: several conditions on the same related record
+
+A relation filter (`via()`, see [Relation Filters](05-relation-filters.md)) asks "is
+there a related record with X". Two of them ask twice, and each may find a different
+record:
+
+```php
+// Accounts with SOME contact named Miller and SOME contact who is a buyer —
+// possibly two different contacts
+$selection = FilterSelection::make()
+    ->where(ContactNameFilter::class)->contains('Miller')
+    ->where(ContactPositionFilter::class)->is('buyer');
+```
+
+A relation group asks once, for one record that meets all its conditions:
+
+```php
+// Accounts with a contact who is named Miller AND is a buyer
+$selection = FilterSelection::make()->whereHas('contacts', function (FilterGroup $contact) {
+    $contact->where(ContactNameFilter::class)->contains('Miller');
+    $contact->where(ContactPositionFilter::class)->is('buyer');
+});
+```
+
+It is applied as one `whereHas('contacts', …)` with all conditions inside.
+
+## Modes
+
+| | method | meaning |
+|---|---|---|
+| has | `whereHas($relation, $callback)`, `FilterGroup::has()` | some related record matches all conditions of the group |
+| doesn't have | `whereDoesntHave($relation, $callback)`, `FilterGroup::doesntHave()` | no related record matches them; records without any related record count too |
+| has none | `whereHasNone($relation)`, `FilterGroup::hasNone()` | no related record at all; the group takes no conditions |
+
+The operator of the group works as usual: pass `GroupOperatorEnum::OR` for "a contact
+who is a buyer OR works in purchasing". Groups nest, also inside relation groups
+(see the note under Requirements for a relation group inside a relation group).
+
+## Filters that belong to a relation
+
+A filter whose columns live on the related model declares the relation:
+
+```php
+class ContactPositionFilter extends SelectFilter
+{
+    public function relationScope(): ?string
+    {
+        return 'contacts';
+    }
+
+    public function column(): string
+    {
+        return 'position';
+    }
+}
+```
+
+- inside a group for `contacts` it applies to the contact directly
+- anywhere else it wraps itself in `whereHas('contacts', …)` — it never runs against the
+  wrong table, also when it has its own `apply()` logic
+- inside a group for another relation the resolver reports it (`OutOfScope`)
+
+`via()` stays for registering an existing filter of the related model on the parent
+model. Inside a group for the same relation, a `via()` filter does not add a second
+`whereHas()`.
+
+## Stored form
+
+```json
+{
+  "group": {
+    "operator": "and",
+    "items": [
+      {
+        "operator": "and",
+        "relation": "contacts",
+        "relation_mode": "has",
+        "items": [
+          {"filter": "ContactNameFilter", "mode": "contains", "value": "Miller"},
+          {"filter": "ContactPositionFilter", "mode": "is", "value": "buyer"}
+        ]
+      },
+      {"operator": "and", "relation": "invoices", "relation_mode": "has_none", "items": []}
+    ]
+  }
+}
+```
+
+Groups without `relation` are stored as before.
+
+## Resolution
+
+The resolver keeps the relation of every group (see [Resolution](11-resolution.md)).
+
+- lenient: a condition that cannot be applied is left out; a group that ends up empty
+  is removed
+- restrictive: the condition matches nothing. Inside a "doesn't have" group that would
+  turn the group into "matches every record", so the whole group matches nothing instead
+
+`explain()` shows the relation and mode of each group: `HAS contacts WHERE (…)`,
+`DOESNT HAVE contacts WHERE (…)`, `HAS NO contacts`. A group whose relation data a
+lenient load could not read shows as `UNRESOLVED (<reason>) WHERE (…)`.
+
+## Collections
+
+`CollectionApplicator` gives the same result in memory: it reads the related records
+from the item and applies the group to them. On an Eloquent collection a relation the
+models do not have yet is loaded first, in one query for all of them (`loadMissing()`),
+so no lazy loading happens. Array items carry the related records under the relation's
+key (`data_get($item, $relation)`); an item without that key has no related records.
+
+## Requirements
+
+Relation groups and scoped filters need an Eloquent query (`whereHas()`); on a plain
+query builder they throw `InvalidArgumentException`.
+
+A group may only use a relation that a registered filter declares, through
+`relationScope()` or `via()`. The relation of a stored group becomes a method call on
+the model, so an undeclared one is rejected before it is called: the applicators throw
+`InvalidArgumentException`, the resolver reports `UnknownRelation` (strict: exception,
+lenient: the group is left out, restrictive: the group matches nothing).
+
+Stored data whose relation cannot be read (an empty or non-string `relation`, an
+unknown `relation_mode`, a `has_none` group with conditions) throws
+`InvalidArgumentException` on loading. With
+`fromJson($json, lenient: true)` the group keeps the data as given, survives saving, is
+reported by the resolver as `UnresolvedRelation` (handled like `UnknownRelation`) and
+cannot be applied before that (`LogicException`), like an unknown match mode. When the
+resolver leaves out the root group itself, the result has no conditions and can be
+applied.
+
+The check always looks at the filters registered for the filtered model. A relation
+group inside a relation group names a relation of the *related* model (`pond` on a
+koi, inside `whereHas('kois')`), so it is only accepted when a registered filter
+declares that inner name as well. A path-based check (`kois.pond`) is planned.

@@ -7,6 +7,7 @@ namespace Ameax\FilterCore\Selections;
 use Ameax\FilterCore\Data\FilterValue;
 use Ameax\FilterCore\Data\FilterValueBuilder;
 use Ameax\FilterCore\Enums\GroupOperatorEnum;
+use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Filters\Filter;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Jsonable;
@@ -227,6 +228,43 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
     }
 
     /**
+     * Add a group of conditions that must hold for one and the same related record.
+     *
+     * @example
+     * $selection->whereHas('kois', function (FilterGroup $koi) {
+     *     $koi->where(KoiStatusFilter::class)->is('active');
+     *     $koi->where(KoiCountFilter::class)->gt(5);
+     * });
+     * // Ponds with a koi that is active AND has a count above 5 (the same koi)
+     */
+    public function whereHas(string $relation, callable $callback, GroupOperatorEnum $operator = GroupOperatorEnum::AND): self
+    {
+        $this->rootGroup->whereHas($relation, $callback, $operator);
+
+        return $this;
+    }
+
+    /**
+     * Add a group of conditions that no related record may match.
+     */
+    public function whereDoesntHave(string $relation, callable $callback, GroupOperatorEnum $operator = GroupOperatorEnum::AND): self
+    {
+        $this->rootGroup->whereDoesntHave($relation, $callback, $operator);
+
+        return $this;
+    }
+
+    /**
+     * Only records without any related record.
+     */
+    public function whereHasNone(string $relation): self
+    {
+        $this->rootGroup->whereHasNone($relation);
+
+        return $this;
+    }
+
+    /**
      * Create an OR selection (top-level OR instead of AND).
      *
      * @param  class-string|null  $modelClass
@@ -269,8 +307,8 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
         $key = $filterClass::key();
         $items = $this->rootGroup->getItems();
 
-        // Rebuild root group without matching filters
-        $newGroup = new FilterGroup($this->rootGroup->getOperator());
+        // Rebuild root group without matching filters, keeping a relation it is bound to
+        $newGroup = $this->rootGroup->emptyCopy();
         foreach ($items as $item) {
             if ($item instanceof FilterValue && $item->getFilterKey() === $key) {
                 continue;
@@ -495,8 +533,10 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
      */
     public function toArray(): array
     {
-        // For backward compatibility, use legacy format if possible
-        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND) {
+        // For backward compatibility, use legacy format if possible. It has no place
+        // for a relation, so a root group bound to one always uses the group format.
+        if (! $this->hasNestedGroups() && $this->rootGroup->getOperator() === GroupOperatorEnum::AND
+            && ! $this->rootGroup->isRelationGroup()) {
             $data = [
                 'name' => $this->name,
                 'description' => $this->description,
@@ -699,7 +739,27 @@ final class FilterSelection implements Arrayable, Jsonable, JsonSerializable
             }
         }
 
-        return implode($operator, $parts);
+        $explanation = implode($operator, $parts);
+
+        // Relation data a lenient load could not read: say so, or the conditions would
+        // read as plain ones ("has no active koi" as "status is active").
+        $unresolved = $group->unresolvedRelationReason();
+        if ($unresolved !== null) {
+            return $explanation === '' ? "UNRESOLVED ({$unresolved})" : "UNRESOLVED ({$unresolved}) WHERE ({$explanation})";
+        }
+
+        $relation = $group->getRelation();
+
+        // An empty "has" or "doesn't have" group is not applied, so it explains as nothing.
+        if ($relation === null || ($explanation === '' && $group->getRelationMode() !== RelationModeEnum::HAS_NONE)) {
+            return $explanation;
+        }
+
+        return match ($group->getRelationMode()) {
+            RelationModeEnum::HAS => "HAS {$relation} WHERE ({$explanation})",
+            RelationModeEnum::DOESNT_HAVE => "DOESNT HAVE {$relation} WHERE ({$explanation})",
+            RelationModeEnum::HAS_NONE => "HAS NO {$relation}",
+        };
     }
 
     /**

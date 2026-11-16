@@ -148,9 +148,14 @@ trait Filterable
      */
     public function scopeApplyFilters(Builder $query, array|FilterSelection $filters): Builder
     {
-        // Nested groups and OR selections need the group logic; the flat path below
-        // combines everything with AND.
-        if ($filters instanceof FilterSelection && ($filters->hasNestedGroups() || $filters->getOperator() === GroupOperatorEnum::OR)) {
+        // Nested groups, OR selections and a root group bound to a relation need the
+        // group logic; the flat path below combines the conditions with AND and would
+        // drop the relation.
+        if ($filters instanceof FilterSelection && (
+            $filters->hasNestedGroups()
+            || $filters->getOperator() === GroupOperatorEnum::OR
+            || $filters->getGroup()->isRelationGroup()
+        )) {
             return $this->scopeApplySelection($query, $filters);
         }
 
