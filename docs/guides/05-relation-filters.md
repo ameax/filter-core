@@ -130,9 +130,30 @@ SomeFilter::withoutRelation('company')
 
 ## Important Behavior
 
-### Null Relations are Excluded
+### Negated Modes Hold for Every Related Record
 
-When using `via()`, records without the relationship are **never included**:
+A negated mode — `isNot`, `none`, `empty`, `notInDateRange` — means that **no related
+record** matches the positive mode (`is`, `any`, `notEmpty`, `dateRange`). It becomes
+`whereDoesntHave()` with the positive condition, so a record without any related record
+is included, and a mode and its negation always add up to all records:
+
+```php
+// Companies with no contact whose email is set — those without contacts included
+Company::query()->applyFilter(FilterValue::for(ContactEmailFilter::class)->empty());
+// → WHERE NOT EXISTS (SELECT * FROM contacts WHERE … AND email IS NOT NULL)
+
+// Users whose company is not active — users without a company included
+User::query()->applyFilter(FilterValue::for(CompanyStatusFilter::class)->isNot('active'));
+```
+
+The same holds for a filter with `relationScope()` outside a group for its relation.
+Inside a relation group the conditions apply to one related record, so there a negated
+mode is a condition on that record (see [Relation Groups](12-relation-groups.md)).
+
+### Null Relations are Excluded for Positive Modes
+
+When using `via()` with a positive mode, records without the relationship are **never
+included**:
 
 ```php
 // User without company (company_id = null) is NEVER returned

@@ -13,8 +13,7 @@ use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
-use Ameax\FilterCore\MatchModes\AnyMatchMode;
-use Ameax\FilterCore\MatchModes\NoneMatchMode;
+use Ameax\FilterCore\MatchModes\MatchModeNegation;
 use Ameax\FilterCore\Resolution\FilterContext;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
@@ -227,6 +226,11 @@ final class QueryApplicator
 
             if ($filter === null || $relation === null) {
                 // Direct filter (no relation or filter not found)
+                $direct[] = $filterValue;
+            } elseif ($filter->getRelationMode() === RelationModeEnum::HAS
+                && MatchModeNegation::positiveOf($filterValue->getMatchMode()) !== null) {
+                // A negated mode inverts the relation (applyRelationFilter()), so
+                // it cannot share the whereHas() of the positive conditions.
                 $direct[] = $filterValue;
             } else {
                 // Group by relation + mode (e.g., "pond:has" or "pond:doesnt_have")
@@ -487,13 +491,13 @@ final class QueryApplicator
         MatchModeContract $matchMode,
         mixed $value
     ): void {
-        // "none of" on a HAS relation must invert: use whereDoesntHave
-        // with a positive whereIn, so records having any of the specified
-        // related values are excluded.
-        if ($matchMode instanceof NoneMatchMode && $mode === RelationModeEnum::HAS) {
-            $query->whereDoesntHave($relation, function (Builder $relQuery) use ($column, $value): void {
-                $values = is_array($value) ? $value : [$value];
-                $relQuery->whereIn($column, $values);
+        // A negated mode on a HAS relation must invert: "none of", "is not",
+        // "is empty" and "not in range" hold when no related record matches the
+        // positive mode — also when there is no related record at all.
+        $positive = MatchModeNegation::positiveOf($matchMode);
+        if ($positive !== null && $mode === RelationModeEnum::HAS) {
+            $query->whereDoesntHave($relation, function (Builder $relQuery) use ($column, $positive, $value): void {
+                $positive->apply($relQuery, $column, $value);
             });
 
             return;
@@ -562,11 +566,12 @@ final class QueryApplicator
             throw new InvalidArgumentException("Filter '{$filter->resolveKey()}' belongs to relation '{$scope}' and needs an Eloquent query");
         }
 
-        // "None of" must hold for every related record, as for via() filters
-        // (applyRelationFilter()): no related record has any of the values.
-        if ($matchMode instanceof NoneMatchMode) {
-            $query->whereDoesntHave($scope, function (Builder $relQuery) use ($scope, $condition): void {
-                $this->withinRelation($scope, fn () => $condition($relQuery, new AnyMatchMode));
+        // A negated mode must hold for every related record, as for via() filters
+        // (applyRelationFilter()): no related record matches the positive mode.
+        $positive = $matchMode === null ? null : MatchModeNegation::positiveOf($matchMode);
+        if ($positive !== null) {
+            $query->whereDoesntHave($scope, function (Builder $relQuery) use ($scope, $condition, $positive): void {
+                $this->withinRelation($scope, fn () => $condition($relQuery, $positive));
             });
 
             return;

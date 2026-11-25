@@ -11,8 +11,7 @@ use Ameax\FilterCore\Enums\GroupOperatorEnum;
 use Ameax\FilterCore\Enums\RelationModeEnum;
 use Ameax\FilterCore\Exceptions\FilterValidationException;
 use Ameax\FilterCore\Filters\Filter;
-use Ameax\FilterCore\MatchModes\AnyMatchMode;
-use Ameax\FilterCore\MatchModes\NoneMatchMode;
+use Ameax\FilterCore\MatchModes\MatchModeNegation;
 use Ameax\FilterCore\Query\ValuePreparer;
 use Ameax\FilterCore\Selections\FilterGroup;
 use Ameax\FilterCore\Selections\FilterSelection;
@@ -314,14 +313,14 @@ final class CollectionApplicator
         $scope = $filter?->relationScope();
         if ($scope !== null && $scope !== $this->currentRelation) {
             self::loadMissing($collection, $scope);
-            // "None of": no related item has any of the values (as in the query).
-            $none = $matchMode instanceof NoneMatchMode;
-            $mode = $none ? new AnyMatchMode : $matchMode;
+            // A negated mode: no related item matches the positive mode (as in the query).
+            $positive = MatchModeNegation::positiveOf($matchMode);
+            $mode = $positive ?? $matchMode;
 
             return $collection->filter(fn (mixed $item): bool => $this->withinRelation(
                 $scope,
                 fn () => $mode->applyToCollection(self::related($item, $scope), $column, $value)
-            )->isNotEmpty() !== $none);
+            )->isNotEmpty() !== ($positive !== null));
         }
 
         return $matchMode->applyToCollection($collection, $column, $value);
