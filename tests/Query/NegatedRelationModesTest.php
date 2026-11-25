@@ -7,6 +7,7 @@ use Ameax\FilterCore\MatchModes\DateRangeMatchMode;
 use Ameax\FilterCore\MatchModes\NotInDateRangeMatchMode;
 use Ameax\FilterCore\Query\QueryApplicator;
 use Ameax\FilterCore\Selections\FilterSelection;
+use Ameax\FilterCore\Tests\Filters\KoiCreatedAtFilter;
 use Ameax\FilterCore\Tests\Filters\KoiStatusFilter;
 use Ameax\FilterCore\Tests\Filters\KoiVarietyFilter;
 use Ameax\FilterCore\Tests\Filters\PondKoiCreatedAtFilter;
@@ -136,3 +137,12 @@ it('adds a mode and its negation up to all records', function (string $filter, s
     'any / none' => [KoiStatusFilter::class, 'any', 'none', ['inactive']],
     'not empty / empty' => [KoiVarietyFilter::class, 'notEmpty', 'empty', null],
 ]);
+
+it('runs the own apply() logic of a via() filter inside the relation', function () {
+    // DateFilter has its own apply(); it used to run on the ponds table and ignore via().
+    $filters = [KoiCreatedAtFilter::via('kois')];
+    $in2023 = DateRangeValue::between('2023-01-01', '2023-12-31');
+
+    expect(negatedViaQuery(FilterSelection::make()->add(new FilterValue('KoiCreatedAtFilter', new DateRangeMatchMode, $in2023)), $filters))->toBe(['A', 'B'])
+        ->and(negatedViaQuery(FilterSelection::make()->add(new FilterValue('KoiCreatedAtFilter', new NotInDateRangeMatchMode, $in2023)), $filters))->toBe(['C', 'D']);
+});
